@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { extractBrandKit, extractBrandKitFromImage } from '../services/geminiService';
 import { Spinner } from './Spinner';
 import { UploadIcon } from './Icons';
-import type { BrandKitData } from '../types';
+import type { BrandKitData, Brand } from '../types';
 
 const ColorSwatch: React.FC<{ color?: string; name: string }> = ({ color, name }) => (
     <div className="flex flex-col items-center space-y-2">
@@ -19,7 +19,11 @@ const ColorSwatch: React.FC<{ color?: string; name: string }> = ({ color, name }
     </div>
 );
 
-export const BrandKit: React.FC = () => {
+interface BrandKitProps {
+    setBrands: React.Dispatch<React.SetStateAction<Brand[]>>;
+}
+
+export const BrandKit: React.FC<BrandKitProps> = ({ setBrands }) => {
     const [url, setUrl] = useState<string>('');
     const [brandKit, setBrandKit] = useState<BrandKitData | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
@@ -45,6 +49,28 @@ export const BrandKit: React.FC = () => {
         setImagePreview(null);
         setBrandKit(null);
         setError(null);
+    };
+
+    const handleSaveBrand = () => {
+        if (!brandKit) return;
+        const brandName = prompt("Inserisci un nome per questo Brand Kit:", url || imageFile?.name || "New Brand");
+        if (brandName) {
+            const newBrand: Brand = {
+                id: `brand-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                name: brandName,
+                kit: brandKit,
+            };
+            setBrands(prev => {
+                // Ensure no duplicate IDs, though highly unlikely
+                const existing = prev.find(b => b.id === newBrand.id);
+                if (existing) return prev;
+                return [...prev, newBrand];
+            });
+            // Use a timeout to allow React's state update to process before blocking the thread with an alert
+            setTimeout(() => {
+                 alert(`Brand "${brandName}" salvato nel Brand Hub!`);
+            }, 0);
+        }
     };
 
     const handleSubmit = useCallback(async () => {
@@ -185,6 +211,14 @@ export const BrandKit: React.FC = () => {
                                 <p className="text-gray-300 italic">{brandKit.toneOfVoice || 'Not specified'}</p>
                             </div>
                         </div>
+                    </div>
+                    <div className="text-center border-t border-gray-700 pt-6">
+                        <button
+                            onClick={handleSaveBrand}
+                            className="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                        >
+                            Salva nel Brand Hub
+                        </button>
                     </div>
                 </div>
             )}

@@ -1,13 +1,13 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { applyVectorToMockup, generateConsistentMockup, generateDesignVariations } from '../services/geminiService';
 import { Spinner } from './Spinner';
-import { UploadIcon, ShoppingCartIcon, DownloadIcon, WandIcon, DocumentTextIcon, EditIcon } from './Icons';
-import { products, styles, productCategories } from './mockup/data';
+import { UploadIcon, ShoppingCartIcon, DownloadIcon, WandIcon, DocumentTextIcon, EditIcon, PlusIcon } from './Icons';
+import { products, productCategories } from './mockup/data';
 import * as ProductIcons from './mockup/icons';
-import type { MockupProduct, MockupStyle } from './mockup/data';
+import type { MockupProduct } from './mockup/data';
 import { OrderModal } from './OrderModal';
 import { TechPackModal } from './TechPackModal';
-import type { View } from '../types';
+import type { View, Brand, SavedProduct } from '../types';
 
 const base64ToFile = (base64: string, filename: string): File => {
     const arr = base64.split(',');
@@ -25,60 +25,81 @@ const base64ToFile = (base64: string, filename: string): File => {
     return new File([u8arr], filename, { type: mime });
 }
 
-const buildMockupPrompt = (product: MockupProduct, style: MockupStyle, color: string, view: string): string => {
+const buildMockupPrompt = (product: MockupProduct, customizations: { [key: string]: string }, color: string, view: string): string => {
+  let customizationDetails = '';
+  if (product.customizations && Object.keys(customizations).length > 0) {
+      const details = product.customizations.map(cust => {
+          const selectedOptionId = customizations[cust.id];
+          const selectedOption = cust.options.find(opt => opt.id === selectedOptionId);
+          return `- ${cust.name}: ${selectedOption?.description || 'Standard'}`;
+      }).join('\n');
+      if (details) {
+           customizationDetails = `\n**Customizations**\n${details}`;
+      }
+  }
+  
   return `
-Generate a high-resolution, production-ready vector-style mockup of a blank apparel item. The output must be a raster image that perfectly emulates a true vector graphic.
+You are an expert technical fashion illustrator. Your task is to generate a professional 'fashion flat' sketch of a blank apparel item. The final output must be a clean, high-quality raster image that looks like it was created in Adobe Illustrator.
 
-**Core Style: Vector Illustration**
-- **Composition:** The entire product must be rendered using clean, hard-edged geometric shapes and smooth paths, as if it were created in a vector graphics editor.
-- **Color:** Use flat, solid colors for the main body of the product.
-- **Shading:** If shading is necessary to show form, use only simple, subtle linear gradients. Do NOT use complex, photorealistic shadows, airbrushing, or soft gradients.
-- **Textures:** Absolutely NO photographic fabric textures (like cotton weave, denim, fleece). The surface should be perfectly smooth and clean.
-- **Outlines:** Use thin, consistent stroke lines to define edges and seams, or use a lineless style. The style should be consistent.
-- **Background:** A completely neutral, solid light gray (#F0F0F0) background. No props, environments, or textures in the background.
+**Core Style: Fashion Flat (Technical Vector Illustration)**
+- **Representation:** The garment must be illustrated as if it were laid perfectly flat on a surface.
+- **Lines:** Use clean, precise, slightly thicker black (#000000) outlines to define the silhouette, seams, and construction details. This ensures all edges are clearly visible and professional.
+- **Folds & Creases:** **Crucially, minimize fabric folds and creases.** Only include a few stylized, simple lines to suggest form and drape. The garment, especially at the bottom hem, should look flat and neat, not wrinkly.
+- **Color & Shading:** Use flat, solid colors for the main body. Shading should be minimal and stylized, using simple vector shapes, not gradients or photorealistic shadows.
+- **Background:** A completely neutral, solid light gray (#F0F0F0) background.
 
 **Product Details**
 - **Product Type:** ${product.name} (${product.description}).
 - **Fit:** ${product.fit}.
 - **Base Color:** ${color}.
-- **Style Aesthetic:** ${style.name}.
+${customizationDetails}
 
 **Technical Requirements**
 - **View:** ${view}.
-- **Print Area:** The designated print area (${product.printArea}) must be clearly visible, flat, and perfectly centered, ready for a design to be applied.
-- **Output Format:** High resolution 2048x2048px PNG.
-- **Content:** The mockup must be completely blank. No logos, text, tags, or pre-existing graphics.
-- **Framing:** The product should occupy approximately 70% of the image frame.
+- **Content:** The fashion flat must be completely blank. No logos, text, tags, or pre-existing graphics.
+- **Framing:** The product should be centered and occupy approximately 70% of the image frame.
 
-**Negative Prompts (What to AVOID):**
-- **AVOID:** Photorealism, photographs, realistic lighting, complex shadows, fabric textures, 3D rendering effects, human models, props.
+**What to AVOID:**
+- **AVOID:** Photorealism, photographs, realistic fabric textures (unless requested), complex shadows, 3D rendering effects, human models, props, messy or excessive wrinkles.
   `.trim();
 }
 
-const buildFollowUpMockupPrompt = (product: MockupProduct, style: MockupStyle, color: string, newView: string): string => {
+const buildFollowUpMockupPrompt = (product: MockupProduct, customizations: { [key: string]: string }, color: string, newView: string): string => {
+   let customizationDetails = '';
+    if (product.customizations && Object.keys(customizations).length > 0) {
+        const details = product.customizations.map(cust => {
+            const selectedOptionId = customizations[cust.id];
+            const selectedOption = cust.options.find(opt => opt.id === selectedOptionId);
+            return `- ${cust.name}: ${selectedOption?.description || 'Standard'}`;
+        }).join('\n');
+        if (details) {
+             customizationDetails = `\n**Customizations**\n${details}`;
+        }
+    }
+
   return `
-You are provided with a reference image of a vector-style apparel mockup. Your task is to generate a new image of the *exact same item* but from a different viewpoint.
+You are provided with a reference image of a 'fashion flat' sketch. Your task is to generate a new image of the *exact same item* from a different viewpoint, maintaining the identical professional style.
 
 **Consistency is the #1 priority.**
-- The generated item must have the exact same color (${color}), stitching, collar, cuffs, and any other details as the item in the reference image.
-- It must look like it's the same object, just seen from a different angle.
-- Maintain the identical clean, vector illustration style (hard edges, flat colors, no photo textures).
-- The background must be a solid light gray (#F0F0F0).
+- The new view must match the reference image in color (${color}), stitching, fabric weight, and all other details.
+- It must look like the same garment, just from a different angle.
+
+**Style Requirements (Maintain from Reference):**
+- **Style:** Professional 'fashion flat' sketch.
+- **Lines:** Clean, precise, slightly thicker black (#000000) outlines, consistent with the reference.
+- **Folds:** Minimal and stylized fabric folds, consistent with a flat representation. The garment should not look wrinkly.
+- **Background:** Solid light gray (#F0F0F0).
 
 **Product Details (for context):**
 - **Product Type:** ${product.name} (${product.description}).
-- **Style Aesthetic:** ${style.name}.
+${customizationDetails}
 
 **New Viewpoint to Generate:**
 - **View:** ${newView}.
 
-**Output Requirements:**
-- High resolution 2048x2048px PNG.
-- The product should be centered and occupy about 70% of the frame.
-
-**AVOID:**
-- Do NOT change any details of the clothing item from the reference image.
-- AVOID photorealism, textures, complex shadows, and human models.
+**What to AVOID:**
+- Do NOT change any details from the reference image.
+- AVOID photorealism, photographic textures, complex shadows, and human models.
   `.trim();
 }
 
@@ -99,12 +120,14 @@ const viewPromptMap: { [key: string]: string } = {
 interface MockupStudioProps {
     setCurrentView: (view: View) => void;
     setImageForEditing: (image: string) => void;
+    activeBrand: Brand | null;
+    addProductToBrand: (brandId: string, product: SavedProduct) => void;
 }
 
-export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setImageForEditing }) => {
+export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setImageForEditing, activeBrand, addProductToBrand }) => {
     const [selectedProductId, setSelectedProductId] = useState<string>('t-shirt-basic');
     const [selectedViews, setSelectedViews] = useState<string[]>(['frontal', 'retro']);
-    const [selectedStyleId, setSelectedStyleId] = useState<string>('streetwear');
+    const [selectedCustomizations, setSelectedCustomizations] = useState<{ [key: string]: string }>({});
     const [color, setColor] = useState<string>('#FFFFFF');
     const [designImage, setDesignImage] = useState<File | null>(null);
     const [applicationType, setApplicationType] = useState<'Print' | 'Embroidery'>('Print');
@@ -119,8 +142,28 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
     const [isTechPackModalOpen, setIsTechPackModalOpen] = useState(false);
 
     const selectedProduct = useMemo(() => products.find(p => p.id === selectedProductId)!, [selectedProductId]);
-    const selectedStyle = useMemo(() => styles.find(s => s.id === selectedStyleId)!, [selectedStyleId]);
     
+    useEffect(() => {
+        const defaults: { [key: string]: string } = {};
+        selectedProduct.customizations?.forEach(cust => {
+            defaults[cust.id] = cust.defaultOptionId;
+        });
+        setSelectedCustomizations(defaults);
+    }, [selectedProduct]);
+
+    const handleCustomizationChange = (customizationId: string, optionId: string) => {
+        setSelectedCustomizations(prev => ({
+            ...prev,
+            [customizationId]: optionId,
+        }));
+    };
+    
+    const brandColors = useMemo(() => {
+        if (!activeBrand) return [];
+        const { primary, secondary, accent, neutral } = activeBrand.kit.colors;
+        return [primary, secondary, accent, neutral].filter(Boolean);
+    }, [activeBrand]);
+
     const handleViewChange = (viewId: string) => {
         setSelectedViews(prev => {
             const newViews = prev.includes(viewId)
@@ -149,12 +192,12 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
         try {
             const firstViewId = selectedViews[0];
             const firstViewPromptText = viewPromptMap[firstViewId];
-            const baseMockupPrompt = buildMockupPrompt(selectedProduct, selectedStyle, color, firstViewPromptText);
+            const baseMockupPrompt = buildMockupPrompt(selectedProduct, selectedCustomizations, color, firstViewPromptText);
             const firstImage = await generateConsistentMockup(baseMockupPrompt);
 
             const followUpPromises = selectedViews.slice(1).map(viewId => {
                 const viewPromptText = viewPromptMap[viewId];
-                const followUpPrompt = buildFollowUpMockupPrompt(selectedProduct, selectedStyle, color, viewPromptText); 
+                const followUpPrompt = buildFollowUpMockupPrompt(selectedProduct, selectedCustomizations, color, viewPromptText); 
                 return generateConsistentMockup(followUpPrompt, firstImage);
             });
 
@@ -173,16 +216,12 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
             } else {
                 throw new Error("La generazione del mockup non è riuscita a produrre immagini.");
             }
+        // FIX: Safely handle caught error by checking its type before accessing properties.
         } catch (e) {
-            // FIX: The caught error `e` is of type `unknown`. Check if it's an Error instance before using its properties.
-            if (e instanceof Error) {
-                setError(e.message);
-            } else {
-                setError('Si è verificato un errore sconosciuto durante la generazione del mockup.');
-            }
+            setError(e instanceof Error ? e.message : 'Si è verificato un errore sconosciuto durante la generazione del mockup.');
             setStage('config');
         }
-    }, [selectedProduct, selectedStyle, color, selectedViews]);
+    }, [selectedProduct, selectedCustomizations, color, selectedViews]);
 
     const handleApplyDesign = useCallback(async () => {
         if (!generatedMockups || !designImage) {
@@ -210,13 +249,9 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
 
             setFinalImages(finalImagesObj);
             setStage('done');
+        // FIX: Safely handle caught error by checking its type before accessing properties.
         } catch (e) {
-            // FIX: The caught error `e` is of type `unknown`. Check if it's an Error instance before using its properties.
-            if (e instanceof Error) {
-                setError(e.message);
-            } else {
-                setError('Si è verificato un errore sconosciuto durante l\'applicazione del design.');
-            }
+            setError(e instanceof Error ? e.message : 'Si è verificato un errore sconosciuto durante l\'applicazione del design.');
             setStage('config');
         }
     }, [generatedMockups, designImage, applicationType]);
@@ -233,13 +268,9 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
             const mockupFile = base64ToFile(generatedMockups[activeViewId], `mockup-${activeViewId}.png`);
             const variations = await generateDesignVariations(mockupFile, designImage);
             setDesignVariations(variations);
+        // FIX: Safely handle caught error by checking its type before accessing properties.
         } catch (e) {
-            // FIX: The caught error `e` is of type `unknown`. Check if it's an Error instance before using its properties.
-            if (e instanceof Error) {
-                setError(e.message);
-            } else {
-                setError('Si è verificato un errore sconosciuto durante la generazione delle variazioni.');
-            }
+            setError(e instanceof Error ? e.message : 'Si è verificato un errore sconosciuto durante la generazione delle variazioni.');
         } finally {
             setStage('done');
         }
@@ -279,6 +310,35 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const handleSaveToBrandHub = () => {
+        if (!activeBrand || !activeImage) {
+            alert("Per favore, seleziona un brand attivo e genera un mockup prima di salvare.");
+            return;
+        }
+
+        const customOptions: { name: string; option: string; }[] = [];
+        if (selectedProduct.customizations) {
+            for (const cust of selectedProduct.customizations) {
+                const selectedOptionId = selectedCustomizations[cust.id];
+                const selectedOption = cust.options.find(opt => opt.id === selectedOptionId);
+                if (selectedOption) {
+                    customOptions.push({ name: cust.name, option: selectedOption.name });
+                }
+            }
+        }
+        
+        const newProduct: SavedProduct = {
+            id: `prod-${Date.now()}`,
+            productName: selectedProduct.name,
+            color: color,
+            imageUrl: activeImage,
+            customizations: customOptions,
+        };
+
+        addProductToBrand(activeBrand.id, newProduct);
+        alert(`Prodotto "${newProduct.productName}" salvato nel brand "${activeBrand.name}"!`);
     };
 
     const isLoading = ['generating', 'applying', 'generating_variations'].includes(stage);
@@ -342,23 +402,34 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
                                 ))}
                             </div>
                         </div>
-                        {/* Style and Color */}
+                        {/* Customizations */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label htmlFor="style-select" className="block text-sm font-medium text-gray-300 mb-2">3. Seleziona Stile</label>
-                                <select
-                                    id="style-select"
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    value={selectedStyleId}
-                                    onChange={(e) => setSelectedStyleId(e.target.value)}
-                                >
-                                    {styles.map(style => (
-                                        <option key={style.id} value={style.id} title={style.tooltip}>{style.name}</option>
-                                    ))}
-                                </select>
+                                {selectedProduct.customizations && selectedProduct.customizations.length > 0 && (
+                                    <>
+                                        <h3 className="text-lg font-bold text-white mb-3">3. Personalizza</h3>
+                                        <div className="space-y-4">
+                                            {selectedProduct.customizations.map(cust => (
+                                                <div key={cust.id}>
+                                                    <label htmlFor={`cust-${cust.id}`} className="block text-sm font-medium text-gray-300 mb-2">{cust.name}</label>
+                                                    <select
+                                                        id={`cust-${cust.id}`}
+                                                        className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                        value={selectedCustomizations[cust.id] || cust.defaultOptionId}
+                                                        onChange={(e) => handleCustomizationChange(cust.id, e.target.value)}
+                                                    >
+                                                        {cust.options.map(opt => (
+                                                            <option key={opt.id} value={opt.id}>{opt.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                             <div>
-                                <label htmlFor="color-picker" className="block text-sm font-medium text-gray-300 mb-2">4. Colore Base</label>
+                                <h3 className="text-lg font-bold text-white mb-3">4. Colore Base</h3>
                                 <div className="flex items-center gap-2">
                                     <input 
                                         type="color" 
@@ -367,6 +438,17 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
                                         onChange={(e) => setColor(e.target.value)}
                                         className="w-12 h-12 p-1 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer"
                                     />
+                                     <div className="flex items-center gap-1">
+                                        {brandColors.map((brandColor, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => setColor(brandColor)}
+                                                className="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-white transition-colors"
+                                                style={{ backgroundColor: brandColor }}
+                                                title={`Set color to ${brandColor}`}
+                                            />
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -476,11 +558,22 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
                                         Applica una Grafica
                                     </button>
                                 </div>
+                                <div className="flex justify-center pt-2">
+                                     <button 
+                                        onClick={handleSaveToBrandHub} 
+                                        disabled={!activeBrand}
+                                        title={!activeBrand ? "Seleziona un brand per salvare il prodotto" : "Salva questo prodotto nel tuo Brand Hub"}
+                                        className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
+                                    >
+                                        <PlusIcon />
+                                        Salva Prodotto nel Brand Hub
+                                    </button>
+                                </div>
                             </div>
                         )}
 
                         {finalImages && (
-                            <div className="mt-4 pt-4 border-t border-gray-700 space-y-4">
+                             <div className="mt-4 pt-4 border-t border-gray-700 space-y-4">
                                 <div className="flex flex-col sm:flex-row justify-center gap-4">
                                      <button onClick={handleGenerateVariations} disabled={stage === 'generating_variations'} className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-600 text-base font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 transition-colors disabled:bg-gray-600/50">
                                         {stage === 'generating_variations' ? <Spinner/> : <WandIcon />}
@@ -515,6 +608,17 @@ export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setI
                                     <button onClick={() => setIsOrderModalOpen(true)} className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors">
                                         <ShoppingCartIcon />
                                         Ordina Stampa
+                                    </button>
+                                </div>
+                                <div className="flex justify-center pt-2">
+                                     <button 
+                                        onClick={handleSaveToBrandHub} 
+                                        disabled={!activeBrand}
+                                        title={!activeBrand ? "Seleziona un brand per salvare il prodotto" : "Salva questo prodotto nel tuo Brand Hub"}
+                                        className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
+                                    >
+                                        <PlusIcon />
+                                        Salva Prodotto nel Brand Hub
                                     </button>
                                 </div>
                             </div>

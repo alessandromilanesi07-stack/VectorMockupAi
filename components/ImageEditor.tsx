@@ -1,11 +1,13 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { editImage } from '../services/geminiService';
 import { Spinner } from './Spinner';
 import { UploadIcon } from './Icons';
+import type { Brand } from '../types';
 
 interface ImageEditorProps {
     imageForEditing: string | null;
     setImageForEditing: (image: string | null) => void;
+    activeBrand: Brand | null;
 }
 
 const base64ToFile = async (base64: string, filename: string): Promise<File> => {
@@ -15,7 +17,7 @@ const base64ToFile = async (base64: string, filename: string): Promise<File> => 
 };
 
 
-export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setImageForEditing }) => {
+export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setImageForEditing, activeBrand }) => {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [originalImage, setOriginalImage] = useState<string | null>(null);
     const [editedImage, setEditedImage] = useState<string | null>(null);
@@ -39,6 +41,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setIm
         }
     }, [imageForEditing, setImageForEditing]);
     
+    const brandColors = useMemo(() => {
+        if (!activeBrand) return [];
+        const { primary, secondary, accent, neutral } = activeBrand.kit.colors;
+        return [primary, secondary, accent, neutral].filter(Boolean);
+    }, [activeBrand]);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -112,6 +120,17 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setIm
                                 <label className="block text-sm font-medium text-gray-300 mb-2">Background Color</label>
                                 <div className="flex items-center gap-2">
                                     <input type="color" value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)} className="w-12 h-12 p-1 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer" />
+                                    <div className="flex items-center gap-2">
+                                        {brandColors.map((color, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => setBackgroundColor(color)}
+                                                className="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-white transition-colors"
+                                                style={{ backgroundColor: color }}
+                                                title={`Set background to ${color}`}
+                                            />
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                             <div>

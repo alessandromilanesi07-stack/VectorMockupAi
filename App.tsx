@@ -9,11 +9,27 @@ import { SketchToMockup } from './components/SketchToMockup';
 import { BrandKit } from './components/BrandKit';
 import { TrendForecaster } from './components/TrendForecaster';
 import { Copywriter } from './components/Copywriter';
-import type { View } from './types';
+import type { View, Brand, SavedProduct } from './types';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('studio');
   const [imageForEditing, setImageForEditing] = useState<string | null>(null);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [activeBrandId, setActiveBrandId] = useState<string | null>(null);
+
+  const activeBrand = brands.find(b => b.id === activeBrandId) || null;
+
+  const addProductToBrand = (brandId: string, product: SavedProduct) => {
+    setBrands(prevBrands => {
+      return prevBrands.map(brand => {
+        if (brand.id === brandId) {
+          const updatedProducts = [...(brand.products || []), product];
+          return { ...brand, products: updatedProducts };
+        }
+        return brand;
+      });
+    });
+  };
 
   const renderView = () => {
     switch (currentView) {
@@ -21,15 +37,18 @@ const App: React.FC = () => {
         return <MockupStudio 
           setCurrentView={setCurrentView} 
           setImageForEditing={setImageForEditing} 
+          activeBrand={activeBrand}
+          addProductToBrand={addProductToBrand}
         />;
       case 'sketch':
         return <SketchToMockup />;
       case 'brand':
-        return <BrandKit />;
+        return <BrandKit setBrands={setBrands} />;
       case 'editor':
         return <ImageEditor 
           imageForEditing={imageForEditing} 
           setImageForEditing={setImageForEditing}
+          activeBrand={activeBrand}
         />;
       case 'generator':
         return <ImageGenerator />;
@@ -40,11 +59,13 @@ const App: React.FC = () => {
       case 'trends':
         return <TrendForecaster />;
       case 'copywriter':
-        return <Copywriter />;
+        return <Copywriter activeBrand={activeBrand} />;
       default:
         return <MockupStudio 
           setCurrentView={setCurrentView} 
           setImageForEditing={setImageForEditing} 
+          activeBrand={activeBrand}
+          addProductToBrand={addProductToBrand}
         />;
     }
   };
@@ -54,6 +75,9 @@ const App: React.FC = () => {
       <Sidebar 
         currentView={currentView} 
         setCurrentView={setCurrentView} 
+        brands={brands}
+        activeBrandId={activeBrandId}
+        setActiveBrandId={setActiveBrandId}
       />
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         {renderView()}

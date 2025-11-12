@@ -22,6 +22,27 @@ export interface BrandKitData {
     toneOfVoice?: string;
 }
 
+export interface SavedProductCustomization {
+    name: string;
+    option: string;
+}
+
+export interface SavedProduct {
+    id: string;
+    productName: string;
+    color: string;
+    imageUrl: string;
+    customizations: SavedProductCustomization[];
+}
+
+export interface Brand {
+    id: string;
+    name: string;
+    kit: BrandKitData;
+    products?: SavedProduct[];
+}
+
+
 export interface OrderDetails {
     productId: string;
     productName: string;

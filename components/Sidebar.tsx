@@ -1,10 +1,13 @@
 import React from 'react';
-import type { View } from '../types';
-import { StudioIcon, EditIcon, GenerateIcon, ThinkIcon, SearchIcon, LogoIcon, SketchIcon, BrandIcon, TrendIcon, CopywriterIcon } from './Icons';
+import type { View, Brand } from '../types';
+import { StudioIcon, EditIcon, GenerateIcon, ThinkIcon, SearchIcon, LogoIcon, SketchIcon, BrandIcon, TrendIcon, CopywriterIcon, PlusIcon } from './Icons';
 
 interface SidebarProps {
   currentView: View;
   setCurrentView: (view: View) => void;
+  brands: Brand[];
+  activeBrandId: string | null;
+  setActiveBrandId: (id: string | null) => void;
 }
 
 interface NavItemProps {
@@ -14,6 +17,38 @@ interface NavItemProps {
   currentView: View;
   setCurrentView: (view: View) => void;
 }
+
+const BrandHubSelector: React.FC<{
+  brands: Brand[];
+  activeBrandId: string | null;
+  setActiveBrandId: (id: string | null) => void;
+  setCurrentView: (view: View) => void;
+}> = ({ brands, activeBrandId, setActiveBrandId, setCurrentView }) => (
+    <div className="px-2 mt-6">
+        <h2 className="px-2 mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">Brand Hub</h2>
+        {brands.length > 0 ? (
+            <select 
+                value={activeBrandId || ''} 
+                onChange={(e) => setActiveBrandId(e.target.value || null)}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white focus:ring-2 focus:ring-blue-500"
+            >
+                <option value="">Nessun Brand Attivo</option>
+                {brands.map(brand => (
+                    <option key={brand.id} value={brand.id}>{brand.name}</option>
+                ))}
+            </select>
+        ) : (
+             <button
+                onClick={() => setCurrentView('brand')}
+                className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 text-gray-400 hover:bg-gray-700 hover:text-white bg-gray-900/50 border-2 border-dashed border-gray-600"
+            >
+                <PlusIcon className="h-4 w-4 mr-2" />
+                Aggiungi un Brand
+            </button>
+        )}
+    </div>
+);
+
 
 const NavItem: React.FC<NavItemProps> = ({ view, label, icon, currentView, setCurrentView }) => (
   <button
@@ -29,7 +64,7 @@ const NavItem: React.FC<NavItemProps> = ({ view, label, icon, currentView, setCu
   </button>
 );
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, brands, activeBrandId, setActiveBrandId }) => {
   return (
     <aside className="w-64 bg-gray-800 p-4 flex flex-col justify-between">
       <div>
@@ -48,6 +83,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView })
           <NavItem view="thinking" label="Thinking Mode" icon={<ThinkIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="search" label="Grounded Search" icon={<SearchIcon />} currentView={currentView} setCurrentView={setCurrentView} />
         </nav>
+         <BrandHubSelector 
+            brands={brands} 
+            activeBrandId={activeBrandId} 
+            setActiveBrandId={setActiveBrandId} 
+            setCurrentView={setCurrentView}
+        />
       </div>
       <div className="text-center text-xs text-gray-500">
           <p>&copy; 2024 VectorCraft AI</p>

@@ -1,10 +1,14 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { generateMarketingCopy } from '../services/geminiService';
 import { Spinner } from './Spinner';
 import { UploadIcon } from './Icons';
-import type { MarketingCopy } from '../types';
+import type { MarketingCopy, Brand } from '../types';
 
-export const Copywriter: React.FC = () => {
+interface CopywriterProps {
+    activeBrand: Brand | null;
+}
+
+export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand }) => {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [productName, setProductName] = useState<string>('');
@@ -12,6 +16,12 @@ export const Copywriter: React.FC = () => {
     const [copy, setCopy] = useState<MarketingCopy | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (activeBrand && activeBrand.kit.toneOfVoice) {
+            setToneOfVoice(activeBrand.kit.toneOfVoice);
+        }
+    }, [activeBrand]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
