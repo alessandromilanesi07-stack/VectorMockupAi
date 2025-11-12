@@ -43,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView })
           <NavItem view="brand" label="Brand Kit" icon={<BrandIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="trends" label="Trend Forecaster" icon={<TrendIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="copywriter" label="AI Copywriter" icon={<CopywriterIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="editor" label="Image Editor" icon={<EditIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+          <NavItem view="editor" label="Social Post Composer" icon={<EditIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="generator" label="Image Generator" icon={<GenerateIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="thinking" label="Thinking Mode" icon={<ThinkIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="search" label="Grounded Search" icon={<SearchIcon />} currentView={currentView} setCurrentView={setCurrentView} />

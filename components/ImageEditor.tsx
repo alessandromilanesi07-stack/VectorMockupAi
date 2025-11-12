@@ -1,17 +1,44 @@
-
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { editImage } from '../services/geminiService';
 import { Spinner } from './Spinner';
 import { UploadIcon } from './Icons';
 
-export const ImageEditor: React.FC = () => {
+interface ImageEditorProps {
+    imageForEditing: string | null;
+    setImageForEditing: (image: string | null) => void;
+}
+
+const base64ToFile = async (base64: string, filename: string): Promise<File> => {
+    const res = await fetch(base64);
+    const blob = await res.blob();
+    return new File([blob], filename, { type: blob.type });
+};
+
+
+export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setImageForEditing }) => {
     const [imageFile, setImageFile] = useState<File | null>(null);
-    const [prompt, setPrompt] = useState<string>('');
     const [originalImage, setOriginalImage] = useState<string | null>(null);
     const [editedImage, setEditedImage] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Social Post Composer State
+    const [backgroundColor, setBackgroundColor] = useState<string>('#111827');
+    const [aspectRatio, setAspectRatio] = useState<string>('original');
+
+    useEffect(() => {
+        if (imageForEditing) {
+            setOriginalImage(imageForEditing);
+            base64ToFile(imageForEditing, 'editing.png').then(file => {
+                setImageFile(file);
+            });
+            setEditedImage(null);
+            setError(null);
+            // Cleanup state so it doesn't re-trigger
+            setImageForEditing(null);
+        }
+    }, [imageForEditing, setImageForEditing]);
+    
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -21,12 +48,28 @@ export const ImageEditor: React.FC = () => {
         }
     };
 
+    const buildEditPrompt = useCallback((): string => {
+        const prompts: string[] = [];
+        prompts.push("You are an expert social media image editor. You will receive an image of a product on a neutral background.");
+        
+        prompts.push(`Change the background to a solid color: ${backgroundColor}. Keep the product's original lighting and shadows as much as possible.`);
+
+        if (aspectRatio !== 'original') {
+            prompts.push(`Then, crop the resulting image to a ${aspectRatio} aspect ratio, ensuring the main product is perfectly centered and fully visible.`);
+        }
+        
+        prompts.push("The final output should be a clean, professional image ready for a social media post.");
+
+        return prompts.join(' ');
+    }, [backgroundColor, aspectRatio]);
+
     const handleSubmit = useCallback(async () => {
-        if (!imageFile || !prompt) {
-            setError('Please upload an image and provide an edit prompt.');
+        if (!imageFile) {
+            setError('Please upload an image to edit.');
             return;
         }
-
+        
+        const prompt = buildEditPrompt();
         setLoading(true);
         setError(null);
         setEditedImage(null);
@@ -39,20 +82,20 @@ export const ImageEditor: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [imageFile, prompt]);
+    }, [imageFile, buildEditPrompt]);
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
             <div className="text-center">
-                <h2 className="text-3xl font-extrabold text-white sm:text-4xl">AI Image Editor</h2>
-                <p className="mt-4 text-lg text-gray-400">Describe your desired changes and let AI do the work.</p>
+                <h2 className="text-3xl font-extrabold text-white sm:text-4xl">Social Post Composer</h2>
+                <p className="mt-4 text-lg text-gray-400">Prepare your mockups for social media. Change backgrounds, crop, and more.</p>
             </div>
             
             {!originalImage && (
                  <div className="w-full max-w-lg mx-auto">
                     <label htmlFor="image-upload" className="w-full flex flex-col items-center justify-center px-4 py-12 bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
                         <UploadIcon />
-                        <span className="mt-4 text-lg text-gray-300">Upload an image to start editing</span>
+                        <span className="mt-4 text-lg text-gray-300">Upload an image or create one in the Mockup Studio</span>
                         <input id="image-upload" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                     </label>
                 </div>
@@ -60,33 +103,47 @@ export const ImageEditor: React.FC = () => {
 
             {originalImage && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    <div className="space-y-4">
+                    <div className="space-y-6 bg-gray-800 p-6 rounded-xl">
                         <h3 className="text-xl font-bold text-white">Your Image</h3>
-                        <img src={originalImage} alt="Original" className="w-full h-auto object-contain rounded-lg shadow-lg" />
-                        <label htmlFor="prompt" className="block text-sm font-medium text-gray-300">Edit Prompt</label>
-                        <input
-                            type="text"
-                            id="prompt"
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="e.g., 'Add a retro filter' or 'Make the sky purple'"
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                        />
+                        <img src={originalImage} alt="Original" className="w-full h-auto object-contain rounded-lg shadow-lg bg-gray-700" />
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Background Color</label>
+                                <div className="flex items-center gap-2">
+                                    <input type="color" value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)} className="w-12 h-12 p-1 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Aspect Ratio</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['original', '1:1', '4:5', '9:16'].map(ratio => (
+                                        <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`p-2 rounded-md text-sm ${aspectRatio === ratio ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                            {ratio === 'original' ? 'Original' : ratio}
+                                            {ratio === '1:1' && <span className="block text-xs text-gray-400">Post</span>}
+                                            {ratio === '4:5' && <span className="block text-xs text-gray-400">Portrait</span>}
+                                            {ratio === '9:16' && <span className="block text-xs text-gray-400">Story</span>}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
                          <button
                             onClick={handleSubmit}
-                            disabled={loading || !imageFile || !prompt}
-                            className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500"
+                            disabled={loading || !imageFile}
+                            className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 mt-4"
                         >
-                            {loading ? <Spinner /> : 'Apply Edit'}
+                            {loading ? <Spinner /> : 'Generate Post'}
                         </button>
                     </div>
                     <div className="space-y-4">
-                        <h3 className="text-xl font-bold text-white">Edited Image</h3>
+                        <h3 className="text-xl font-bold text-white">Result</h3>
                         <div className="w-full aspect-square bg-gray-800 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600">
                            {loading && <Spinner large={true} />}
                            {error && <div className="text-red-400 p-4">{error}</div>}
-                           {editedImage && <img src={editedImage} alt="Edited" className="w-full h-auto object-contain rounded-lg shadow-lg" />}
-                           {!loading && !error && !editedImage && <div className="text-gray-400">Your edited image will appear here</div>}
+                           {editedImage && <img src={editedImage} alt="Edited" className="w-full h-auto object-contain rounded-lg" />}
+                           {!loading && !error && !editedImage && <div className="text-gray-400">Your edited post will appear here</div>}
                         </div>
                     </div>
                 </div>

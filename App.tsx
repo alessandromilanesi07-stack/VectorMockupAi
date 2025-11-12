@@ -13,17 +13,24 @@ import type { View } from './types';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('studio');
+  const [imageForEditing, setImageForEditing] = useState<string | null>(null);
 
   const renderView = () => {
     switch (currentView) {
       case 'studio':
-        return <MockupStudio />;
+        return <MockupStudio 
+          setCurrentView={setCurrentView} 
+          setImageForEditing={setImageForEditing} 
+        />;
       case 'sketch':
         return <SketchToMockup />;
       case 'brand':
         return <BrandKit />;
       case 'editor':
-        return <ImageEditor />;
+        return <ImageEditor 
+          imageForEditing={imageForEditing} 
+          setImageForEditing={setImageForEditing}
+        />;
       case 'generator':
         return <ImageGenerator />;
       case 'thinking':
@@ -35,13 +42,19 @@ const App: React.FC = () => {
       case 'copywriter':
         return <Copywriter />;
       default:
-        return <MockupStudio />;
+        return <MockupStudio 
+          setCurrentView={setCurrentView} 
+          setImageForEditing={setImageForEditing} 
+        />;
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100 font-sans">
-      <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
+      <Sidebar 
+        currentView={currentView} 
+        setCurrentView={setCurrentView} 
+      />
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         {renderView()}
       </main>

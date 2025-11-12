@@ -1,15 +1,13 @@
-
-
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { applyVectorToMockup, generateConsistentMockup, generateDesignVariations } from '../services/geminiService';
 import { Spinner } from './Spinner';
-import { UploadIcon, ShoppingCartIcon, DownloadIcon, WandIcon, DocumentTextIcon } from './Icons';
+import { UploadIcon, ShoppingCartIcon, DownloadIcon, WandIcon, DocumentTextIcon, EditIcon } from './Icons';
 import { products, styles, productCategories } from './mockup/data';
 import * as ProductIcons from './mockup/icons';
 import type { MockupProduct, MockupStyle } from './mockup/data';
 import { OrderModal } from './OrderModal';
 import { TechPackModal } from './TechPackModal';
+import type { View } from '../types';
 
 const base64ToFile = (base64: string, filename: string): File => {
     const arr = base64.split(',');
@@ -98,27 +96,18 @@ const viewPromptMap: { [key: string]: string } = {
     lato_dx: 'Centered, right side view',
 };
 
-export const MockupStudio: React.FC = () => {
+interface MockupStudioProps {
+    setCurrentView: (view: View) => void;
+    setImageForEditing: (image: string) => void;
+}
+
+export const MockupStudio: React.FC<MockupStudioProps> = ({ setCurrentView, setImageForEditing }) => {
     const [selectedProductId, setSelectedProductId] = useState<string>('t-shirt-basic');
     const [selectedViews, setSelectedViews] = useState<string[]>(['frontal', 'retro']);
     const [selectedStyleId, setSelectedStyleId] = useState<string>('streetwear');
     const [color, setColor] = useState<string>('#FFFFFF');
     const [designImage, setDesignImage] = useState<File | null>(null);
-    const [prompt] = useState<string>(`
-Sei un esperto nell'applicare grafiche a mockup di abbigliamento.
-Riceverai due immagini:
-1. Un mockup di abbigliamento vuoto, in stile vettoriale.
-2. La grafica di design di un utente.
-
-Il tuo compito è applicare il design dell'utente sull'area di stampa designata del mockup.
-
-**Istruzioni:**
-1.  **Posizionamento:** Posiziona il design dell'utente perfettamente al centro dell'area di stampa del mockup vuoto.
-2.  **Coerenza di Stile:** L'immagine finale deve mantenere lo stesso identico stile pulito, piatto e da illustrazione vettoriale del mockup di input. NON aggiungere illuminazione, ombre o texture fotorealistiche né al design né al mockup.
-3.  **Applicazione:** Il design deve apparire come se fosse stampato in modo piatto sulla superficie. Non aggiungere pieghe, grinze o distorsioni prospettiche artificiali del tessuto, a meno che non siano estremamente sottili. L'applicazione deve essere pulita e nitida.
-4.  **Conservazione:** Conserva perfettamente il colore, la forma e lo sfondo del mockup originale. Aggiungi solo il design dell'utente.
-5.  **Output Finale:** Il risultato deve essere un'immagine di alta qualità che assomigli a un mockup vettoriale professionale e pronto per la produzione con il design applicato. Evita qualsiasi elemento fotografico.
-    `.trim());
+    const [applicationType, setApplicationType] = useState<'Print' | 'Embroidery'>('Print');
     
     const [generatedMockups, setGeneratedMockups] = useState<{ [viewId: string]: string } | null>(null);
     const [finalImages, setFinalImages] = useState<{ [viewId: string]: string } | null>(null);
@@ -131,7 +120,7 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
 
     const selectedProduct = useMemo(() => products.find(p => p.id === selectedProductId)!, [selectedProductId]);
     const selectedStyle = useMemo(() => styles.find(s => s.id === selectedStyleId)!, [selectedStyleId]);
-
+    
     const handleViewChange = (viewId: string) => {
         setSelectedViews(prev => {
             const newViews = prev.includes(viewId)
@@ -185,7 +174,7 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
                 throw new Error("La generazione del mockup non è riuscita a produrre immagini.");
             }
         } catch (e) {
-            // FIX: The caught error `e` is of type `unknown`. We must check if it's an instance of Error before accessing the `message` property.
+            // FIX: The caught error `e` is of type `unknown`. Check if it's an Error instance before using its properties.
             if (e instanceof Error) {
                 setError(e.message);
             } else {
@@ -209,7 +198,7 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
         try {
             const finalImagesPromises = Object.entries(generatedMockups).map(async ([viewId, mockupBase64]) => {
                 const mockupFile = base64ToFile(mockupBase64, `mockup-${viewId}.png`);
-                const result = await applyVectorToMockup(mockupFile, designImage, prompt);
+                const result = await applyVectorToMockup(mockupFile, designImage, applicationType);
                 return { viewId, result };
             });
 
@@ -222,7 +211,7 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
             setFinalImages(finalImagesObj);
             setStage('done');
         } catch (e) {
-            // FIX: The caught error `e` is of type `unknown`. We must check if it's an instance of Error before accessing the `message` property.
+            // FIX: The caught error `e` is of type `unknown`. Check if it's an Error instance before using its properties.
             if (e instanceof Error) {
                 setError(e.message);
             } else {
@@ -230,7 +219,7 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
             }
             setStage('config');
         }
-    }, [generatedMockups, designImage, prompt]);
+    }, [generatedMockups, designImage, applicationType]);
 
     const handleGenerateVariations = useCallback(async () => {
         if (!generatedMockups?.[activeViewId] || !designImage) {
@@ -245,16 +234,24 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
             const variations = await generateDesignVariations(mockupFile, designImage);
             setDesignVariations(variations);
         } catch (e) {
-            // FIX: The caught error `e` is of type `unknown`. We must check if it's an instance of Error before accessing the `message` property.
+            // FIX: The caught error `e` is of type `unknown`. Check if it's an Error instance before using its properties.
             if (e instanceof Error) {
                 setError(e.message);
             } else {
-                setError('An unknown error occurred while generating variations.');
+                setError('Si è verificato un errore sconosciuto durante la generazione delle variazioni.');
             }
         } finally {
             setStage('done');
         }
     }, [activeViewId, generatedMockups, designImage]);
+    
+    const handleEditForSocial = () => {
+        const imageToEdit = finalImages?.[activeViewId] || generatedMockups?.[activeViewId];
+        if (imageToEdit) {
+            setImageForEditing(imageToEdit);
+            setCurrentView('editor');
+        }
+    };
 
     const handleSelectVariation = (variationImage: string) => {
         if (!finalImages) return;
@@ -273,6 +270,17 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
         document.body.removeChild(link);
     };
     
+    const handleDownloadBlankMockup = () => {
+        const imageToDownload = generatedMockups?.[activeViewId];
+        if (!imageToDownload) return;
+        const link = document.createElement('a');
+        link.href = imageToDownload;
+        link.download = `${selectedProduct.name.replace(/\s+/g, '_')}_${activeViewId}_blank_mockup.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const isLoading = ['generating', 'applying', 'generating_variations'].includes(stage);
     const loadingMessage = 
         stage === 'generating' ? 'Generating AI Mockups...' :
@@ -350,14 +358,16 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
                                 </select>
                             </div>
                             <div>
-                            <label htmlFor="color-picker" className="block text-sm font-medium text-gray-300 mb-2">4. Colore Base</label>
-                            <input 
-                                type="color" 
-                                id="color-picker"
-                                value={color}
-                                onChange={(e) => setColor(e.target.value)}
-                                className="w-full h-12 p-1 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer"
-                            />
+                                <label htmlFor="color-picker" className="block text-sm font-medium text-gray-300 mb-2">4. Colore Base</label>
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="color" 
+                                        id="color-picker"
+                                        value={color}
+                                        onChange={(e) => setColor(e.target.value)}
+                                        className="w-12 h-12 p-1 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer"
+                                    />
+                                </div>
                             </div>
                         </div>
                         {/* Generate Button */}
@@ -372,14 +382,28 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
                         </div>
                         {/* Design Upload and Apply */}
                         {generatedMockups && (
-                            <div className="space-y-4 border-t border-gray-700 pt-4">
-                                <div>
-                                    <label htmlFor="design-upload" className="block text-sm font-medium text-gray-300 mb-2">5. Carica il Tuo Design</label>
-                                    <label htmlFor="design-upload" className="w-full flex flex-col items-center justify-center px-4 py-6 bg-gray-700 border-2 border-dashed border-gray-500 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors">
-                                        <UploadIcon />
-                                        <span className="mt-2 text-sm text-gray-400">{designImage ? designImage.name : 'Click to upload'}</span>
-                                        <input id="design-upload" type="file" className="hidden" accept="image/*" onChange={(e) => setDesignImage(e.target.files ? e.target.files[0] : null)} />
-                                    </label>
+                            <div id="upload-section" className="space-y-4 border-t border-gray-700 pt-4 rounded-lg">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label htmlFor="design-upload" className="block text-sm font-medium text-gray-300 mb-2">5. Carica il Tuo Design</label>
+                                        <label htmlFor="design-upload" className="w-full flex flex-col items-center justify-center px-4 py-6 bg-gray-700 border-2 border-dashed border-gray-500 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors">
+                                            <UploadIcon />
+                                            <span className="mt-2 text-sm text-gray-400">{designImage ? designImage.name : 'Click to upload'}</span>
+                                            <input id="design-upload" type="file" className="hidden" accept="image/*" onChange={(e) => setDesignImage(e.target.files ? e.target.files[0] : null)} />
+                                        </label>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="application-type" className="block text-sm font-medium text-gray-300 mb-2">6. Tipo Applicazione</label>
+                                         <select
+                                            id="application-type"
+                                            className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500"
+                                            value={applicationType}
+                                            onChange={(e) => setApplicationType(e.target.value as 'Print' | 'Embroidery')}
+                                        >
+                                            <option value="Print">Stampa DTG</option>
+                                            <option value="Embroidery">Ricamo</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="text-center">
                                     <button
@@ -429,6 +453,32 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
                             </div>
                         )}
 
+                        {generatedMockups && !finalImages && !isLoading && (
+                            <div className="mt-4 pt-4 border-t border-gray-700 space-y-4">
+                                <div className="flex flex-col sm:flex-row justify-center gap-4">
+                                    <button onClick={handleDownloadBlankMockup} className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-600 text-base font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 transition-colors">
+                                        <DownloadIcon/>
+                                        Download Mockup Vuoto
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            const uploadSection = document.getElementById('upload-section');
+                                            if (uploadSection) {
+                                                uploadSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                uploadSection.classList.add('ring-2', 'ring-green-500', 'transition-all', 'duration-300');
+                                                setTimeout(() => {
+                                                    uploadSection.classList.remove('ring-2', 'ring-green-500');
+                                                }, 2500);
+                                            }
+                                        }} 
+                                        className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors">
+                                        <WandIcon />
+                                        Applica una Grafica
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {finalImages && (
                             <div className="mt-4 pt-4 border-t border-gray-700 space-y-4">
                                 <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -457,6 +507,10 @@ Il tuo compito è applicare il design dell'utente sull'area di stampa designata 
                                     <button onClick={handleDownload} className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-600 text-base font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 transition-colors">
                                         <DownloadIcon/>
                                         Download
+                                    </button>
+                                    <button onClick={handleEditForSocial} className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-600 text-base font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 transition-colors">
+                                        <EditIcon/>
+                                        Modifica per Social
                                     </button>
                                     <button onClick={() => setIsOrderModalOpen(true)} className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors">
                                         <ShoppingCartIcon />

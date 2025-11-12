@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { extractBrandKit } from '../services/geminiService';
+import { extractBrandKit, extractBrandKitFromImage } from '../services/geminiService';
 import { Spinner } from './Spinner';
+import { UploadIcon } from './Icons';
 import type { BrandKitData } from '../types';
 
 const ColorSwatch: React.FC<{ color?: string; name: string }> = ({ color, name }) => (
@@ -24,58 +25,129 @@ export const BrandKit: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = useCallback(async () => {
-        if (!url) {
-            setError('Please enter a website URL.');
-            return;
-        }
+    const [inputType, setInputType] = useState<'url' | 'image'>('url');
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
+            setBrandKit(null);
+            setError(null);
+        }
+    };
+
+    const clearInputs = () => {
+        setUrl('');
+        setImageFile(null);
+        setImagePreview(null);
+        setBrandKit(null);
+        setError(null);
+    };
+
+    const handleSubmit = useCallback(async () => {
         setLoading(true);
         setError(null);
         setBrandKit(null);
 
         try {
-            // A simple check for a valid-looking URL
-            const fullUrl = url.startsWith('http') ? url : `https://${url}`;
-            const result = await extractBrandKit(fullUrl);
+            let result: BrandKitData;
+            if (inputType === 'url') {
+                if (!url) {
+                    setError('Please enter a website URL.');
+                    setLoading(false);
+                    return;
+                }
+                const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+                result = await extractBrandKit(fullUrl);
+            } else { // inputType === 'image'
+                if (!imageFile) {
+                    setError('Please upload a logo image.');
+                    setLoading(false);
+                    return;
+                }
+                result = await extractBrandKitFromImage(imageFile);
+            }
             setBrandKit(result);
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Failed to extract brand kit. The website may be inaccessible or the format is not recognized.');
+            setError(e instanceof Error ? e.message : 'Failed to extract brand kit. Please check your input and try again.');
         } finally {
             setLoading(false);
         }
-    }, [url]);
+    }, [url, inputType, imageFile]);
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="text-center">
                 <h2 className="text-3xl font-extrabold text-white sm:text-4xl">Brand Kit Extractor</h2>
-                <p className="mt-4 text-lg text-gray-400">Instantly generate a brand kit from any website URL.</p>
+                <p className="mt-4 text-lg text-gray-400">Instantly generate a brand kit from any website URL or logo image.</p>
             </div>
 
             <div className="bg-gray-800 p-8 rounded-xl shadow-2xl space-y-6">
-                <div className="relative">
-                    <input
-                        type="text"
-                        className="w-full bg-gray-700 border border-gray-600 rounded-full py-3 pl-5 pr-32 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="e.g., google.com"
-                        value={url}
-                        onChange={(e) => setUrl(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                    />
-                    <button
-                        onClick={handleSubmit}
-                        disabled={loading || !url}
-                        className="absolute inset-y-0 right-0 flex items-center justify-center px-6 my-1.5 mr-1.5 text-sm font-medium rounded-full text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500"
+                <div className="flex justify-center border-b border-gray-700 -mt-2 mb-4">
+                    <button 
+                        onClick={() => { setInputType('url'); clearInputs(); }}
+                        className={`px-6 py-2 text-sm font-medium transition-colors ${inputType === 'url' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'}`}
                     >
-                        {loading ? <Spinner /> : 'Extract'}
+                        From URL
+                    </button>
+                    <button 
+                        onClick={() => { setInputType('image'); clearInputs(); }}
+                        className={`px-6 py-2 text-sm font-medium transition-colors ${inputType === 'image' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        From Logo Image
                     </button>
                 </div>
+
+                {inputType === 'url' && (
+                    <div className="relative">
+                        <input
+                            type="text"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-full py-3 pl-5 pr-32 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="e.g., google.com"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                        />
+                        <button
+                            onClick={handleSubmit}
+                            disabled={loading || !url}
+                            className="absolute inset-y-0 right-0 flex items-center justify-center px-6 my-1.5 mr-1.5 text-sm font-medium rounded-full text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500"
+                        >
+                            {loading ? <Spinner /> : 'Extract'}
+                        </button>
+                    </div>
+                )}
+                
+                {inputType === 'image' && (
+                     <div className="space-y-4">
+                        <label htmlFor="logo-upload" className="w-full flex flex-col items-center justify-center px-4 py-10 bg-gray-700 border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors">
+                            {imagePreview ? (
+                                <img src={imagePreview} alt="Logo preview" className="max-h-32 rounded-md object-contain"/>
+                            ) : (
+                                <>
+                                    <UploadIcon />
+                                    <span className="mt-2 text-sm text-gray-400">{imageFile ? imageFile.name : 'Click to upload a logo'}</span>
+                                </>
+                            )}
+                            <input id="logo-upload" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                        </label>
+                         <button
+                            onClick={handleSubmit}
+                            disabled={loading || !imageFile}
+                            className="w-full inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {loading ? <Spinner /> : 'Extract from Image'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {error && <div className="bg-red-900/50 text-red-300 p-4 rounded-lg text-center">{error}</div>}
 
-            {loading && <div className="text-center text-lg text-gray-300">Analyzing website...</div>}
+            {loading && <div className="text-center text-lg text-gray-300">Analyzing...</div>}
 
             {brandKit && (
                 <div className="bg-gray-800 p-6 rounded-xl shadow-2xl space-y-8">
@@ -103,9 +175,15 @@ export const BrandKit: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                        <div>
-                            <h3 className="text-xl font-bold mb-4 text-white">Logo Description</h3>
-                            <p className="text-gray-300">{brandKit.logoDescription || 'No description could be generated.'}</p>
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="text-xl font-bold mb-2 text-white">Logo Description</h3>
+                                <p className="text-gray-300">{brandKit.logoDescription || 'No description could be generated.'}</p>
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold mb-2 text-white">Tone of Voice</h3>
+                                <p className="text-gray-300 italic">{brandKit.toneOfVoice || 'Not specified'}</p>
+                            </div>
                         </div>
                     </div>
                 </div>

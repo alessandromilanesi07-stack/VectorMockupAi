@@ -19,6 +19,7 @@ export interface BrandKitData {
         body: string;
     };
     logoDescription: string;
+    toneOfVoice?: string;
 }
 
 export interface OrderDetails {

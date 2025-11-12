@@ -28,31 +28,57 @@ const fileToGenerativePart = (file: File) => {
   });
 };
 
-export const applyVectorToMockup = async (mockupImage: File, designImage: File | null, prompt: string): Promise<string> => {
-  const mockupPart = await fileToGenerativePart(mockupImage);
-  const parts: (typeof mockupPart | { text: string })[] = [mockupPart];
-  
-  if (designImage) {
-    const designPart = await fileToGenerativePart(designImage);
-    parts.push(designPart);
-  }
+export const applyVectorToMockup = async (
+    mockupImage: File, 
+    designImage: File | null, 
+    applicationType: 'Print' | 'Embroidery' = 'Print',
+    customInstruction?: string
+): Promise<string> => {
+    const mockupPart = await fileToGenerativePart(mockupImage);
+    const parts: (typeof mockupPart | { text: string })[] = [mockupPart];
+    
+    if (designImage) {
+        const designPart = await fileToGenerativePart(designImage);
+        parts.push(designPart);
+    }
 
-  parts.push({text: prompt});
+    let applicationInstruction = "Apply the design flat onto the print area as a high-quality DTG (Direct-to-Garment) print.";
+    if (applicationType === 'Embroidery') {
+        applicationInstruction = "Apply the design to the mockup, simulating a realistic, high-quality embroidery texture with visible stitching and slight elevation.";
+    }
+    
+    // Custom instruction overrides default behavior
+    if (customInstruction) {
+        applicationInstruction = customInstruction;
+    }
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: { parts },
-    config: {
-      responseModalities: [Modality.IMAGE],
-    },
-  });
+    const prompt = `You are an expert at applying graphics to apparel mockups. You will receive a blank mockup image and a user's design graphic.
+    Your task is to apply the user's design onto the designated print area of the mockup, following a specific creative instruction.
 
-  const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-  if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-    return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
-  }
+    **Creative Instruction:** "${applicationInstruction}"
 
-  throw new Error("No image was generated. Please try again.");
+    **Key Rules:**
+    1.  **Placement:** Position the design on the main print area (e.g., center chest) unless the instruction specifies a different location.
+    2.  **Style Consistency:** The final image must maintain the exact same clean, flat, vector-illustration style of the input mockup. DO NOT add photorealistic lighting, shadows, or textures to the garment itself. The only texture should be on the applied design as specified by the creative application.
+    3.  **Preservation:** Perfectly preserve the original mockup's color, shape, and background. Only add the user's design.
+    4.  **Final Output:** The result must be a high-quality image that looks like a professional, production-ready vector mockup with the design applied. Avoid any photographic elements.`;
+
+    parts.push({text: prompt});
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    const firstPart = response.candidates?.[0]?.content?.parts?.[0];
+    if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
+        return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
+    }
+
+    throw new Error("No image was generated. Please try again.");
 };
 
 export const editImage = async (image: File, prompt: string): Promise<string> => {
@@ -113,12 +139,12 @@ Here is a summary of the VectorCraft AI tool suite:`;
 "Of course. Here is a comprehensive business plan. Let's use VectorCraft AI to make it actionable.
 **1. Executive Summary**: ...
 **2. Market Analysis**:
-   *   **Competitor Research**: You can use the **Brand Kit Extractor** to analyze the websites of your top 3 competitors (e.g., Patagonia, Allbirds). This will give you immediate insights into their branding, color schemes, and visual identity.
+   *   **Competitor Research**: You can use the **Brand Kit Extractor** to analyze the websites of your top 3 competitors (e.g., Patagonia, Allbirds). This will give you immediate insights into their branding, color schemes, and visual identity. You can then save this to your **Brand Hub** for later use.
    *   **Trend Analysis**: Before designing, use the **AI Trend Forecaster** to analyze 'sustainable fashion trends for 2025'. This will give you insights into trending colors and materials.
 **3. Products & Services**:
    *   **Product Visualization**: Once you have your initial designs, use the **Sketch to Mockup** tool to turn your drawings into clean technical flats. Then, take those designs into the **Mockup Studio**. Generate mockups for your core products (e.g., organic cotton T-shirts) in earthy tones using the 'Minimalist' style. This will create your product catalog before you've spent anything on manufacturing. After you have a design you like, use the **AI Design Variations** tool to explore alternatives instantly. Once finalized, click **Generate Tech Pack** to create a spec sheet to send to your manufacturer.
 **4. Marketing & Sales Strategy**:
-   *   **Content Creation**: Use the **Image Generator** to create stunning lifestyle images. Then, take those mockups to the **AI Brand Copywriter** to generate product descriptions and social media captions with a 'conscious and inspiring' tone of voice.
+   *   **Content Creation**: Use the **Image Generator** to create stunning lifestyle images. Then, take those mockups to the **AI Brand Copywriter** to generate product descriptions and social media captions with a 'conscious and inspiring' tone of voice. Finally, use the **Social Post Composer** (in the Image Editor) to create ready-to-publish assets for your campaign.
 ...and so on."
 
 Always be helpful, detailed, and focus on integrating the app's features into your advice.`;
@@ -158,17 +184,17 @@ export const searchWithGrounding = async (prompt: string): Promise<{ text: strin
 
 export const sketchToMockup = async (sketchImage: File, prompt: string): Promise<string> => {
     const sketchPart = await fileToGenerativePart(sketchImage);
-    const textPart = { text: `Transform the provided image into a clean, vector-style mockup or technical drawing.
+    const textPart = { text: `Transform the provided user's sketch into a clean, vector-style mockup or technical drawing.
     
     User's creative direction: "${prompt}"
     
     Instructions:
-    1.  Analyze the subject in the user's uploaded image (e.g., clothing, product, UI).
-    2.  Recreate it in a flat, vector illustration style.
-    3.  Use clean lines, solid colors, and simple shading.
-    4.  Remove any distracting backgrounds or photographic textures from the original image.
+    1.  Analyze the subject in the user's uploaded sketch (e.g., clothing, product, UI).
+    2.  **Crucially, interpret the visual information from the sketch.** If the sketch includes colors, apply those colors to the final mockup. If it suggests a texture (like denim or plaid), recreate that texture in a clean, vector style.
+    3.  Recreate the subject in a flat, vector illustration style using clean lines and appropriate shading.
+    4.  Remove any distracting backgrounds or photographic textures from the original sketch, unless they are part of the design itself.
     5.  The final output should be a high-quality, production-ready mockup image against a neutral, solid light gray background.
-    6.  Adhere to the user's creative direction for specific styling and color.
+    6.  The user's creative direction should override any interpretation from the sketch if there is a conflict.
     7.  The output should be only the final mockup image, with no additional text or annotations.`
     };
 
@@ -188,17 +214,69 @@ export const sketchToMockup = async (sketchImage: File, prompt: string): Promise
     throw new Error("No image was generated from the sketch. Please try again.");
 };
 
+export const extractBrandKitFromImage = async (imageFile: File): Promise<BrandKitData> => {
+    const imagePart = await fileToGenerativePart(imageFile);
+    const textPart = {
+        text: `Analyze the provided logo image and extract its brand identity. 
+        
+        Instructions:
+        1.  Identify the primary, secondary, accent, and neutral colors from the logo and provide them as hex color codes. The primary color should be the most dominant one.
+        2.  Identify the main font family used in the logo. If only one font is present, use it for both 'heading' and 'body'. If no text is present, return "Not applicable" for both.
+        3.  Provide a brief, textual description of the logo's appearance (shapes, colors, style).
+        4.  Briefly describe the brand's likely tone of voice based on the logo's design (e.g., 'playful', 'corporate', 'minimalist').
+        5.  Respond ONLY with a valid JSON object based on the schema.`
+    };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: { parts: [imagePart, textPart] },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    colors: {
+                        type: Type.OBJECT,
+                        properties: {
+                            primary: { type: Type.STRING, description: "The primary color of the brand, as a hex code." },
+                            secondary: { type: Type.STRING, description: "The secondary color of the brand, as a hex code." },
+                            accent: { type: Type.STRING, description: "The accent color of the brand, as a hex code." },
+                            neutral: { type: Type.STRING, description: "The neutral color of the brand, as a hex code." },
+                        },
+                        required: ['primary', 'secondary', 'accent', 'neutral'],
+                    },
+                    fonts: {
+                        type: Type.OBJECT,
+                        properties: {
+                            heading: { type: Type.STRING, description: "The font used for headings. Use the main logo font here." },
+                            body: { type: Type.STRING, description: "The font used for body text. Use the main logo font here if only one is present." },
+                        },
+                         required: ['heading', 'body'],
+                    },
+                    logoDescription: { type: Type.STRING, description: "A description of the logo's appearance." },
+                    toneOfVoice: { type: Type.STRING, description: "The brand's likely tone of voice based on the logo's design."}
+                },
+                required: ['colors', 'fonts', 'logoDescription', 'toneOfVoice'],
+            },
+        },
+    });
+
+    const jsonText = response.text.trim();
+    return JSON.parse(jsonText) as BrandKitData;
+};
+
 export const extractBrandKit = async (url: string): Promise<BrandKitData> => {
-    const prompt = `Analyze the website at the URL ${url} and extract its brand identity. Respond ONLY with a valid JSON object that follows this structure: { "colors": { "primary": "string", "secondary": "string", "accent": "string", "neutral": "string" }, "fonts": { "heading": "string", "body": "string" }, "logoDescription": "string" }.
+    const prompt = `Analyze the website at the URL ${url} and extract its brand identity. Respond ONLY with a valid JSON object that follows this structure: { "colors": { "primary": "string", "secondary": "string", "accent": "string", "neutral": "string" }, "fonts": { "heading": "string", "body": "string" }, "logoDescription": "string", "toneOfVoice": "string" }.
     
     Instructions:
     1.  Identify the primary, secondary, accent, and neutral colors and provide them as hex color codes.
     2.  Identify the main font families used for headings and body text.
     3.  Provide a brief, textual description of the company logo's appearance (shapes, colors, style).
-    4.  Do not include any text, markdown formatting, or explanations outside of the JSON object.`;
+    4.  Analyze the website's language and describe its tone of voice (e.g., 'professional', 'playful', 'technical').
+    5.  Do not include any text, markdown formatting, or explanations outside of the JSON object.`;
     
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-pro',
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
@@ -278,14 +356,7 @@ export const generateDesignVariations = async (mockupFile: File, designFile: Fil
     ];
 
     const variationPromises = variationInstructions.map(instruction => {
-        const prompt = `You are an expert at applying graphics to apparel mockups. You will receive a blank mockup image and a user's design graphic.
-        Your task is to apply the design to the mockup, but with this specific creative variation: "${instruction}".
-        
-        Key Rules:
-        1.  Place the design on the main print area (center chest) unless the instruction specifies a different location.
-        2.  Maintain the clean, flat, vector-style of the original mockup. DO NOT add photorealistic lighting, shadows, or textures to the garment.
-        3.  The final output must be only the high-quality mockup image with the modified design applied.`;
-        return applyVectorToMockup(mockupFile, designFile, prompt);
+        return applyVectorToMockup(mockupFile, designFile, 'Print', instruction);
     });
 
     return Promise.all(variationPromises);
