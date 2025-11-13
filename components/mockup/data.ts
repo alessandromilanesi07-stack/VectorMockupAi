@@ -14,132 +14,60 @@ export interface MockupCustomization {
 export interface MockupProduct {
   id: string;
   name: string;
-  category: 'Tops' | 'Felpe' | 'Giacche & Outerwear' | 'Pantaloni' | 'Accessori';
+  category: 'Tops' | 'Felpe' | 'Outerwear' | 'Pantaloni' | 'Accessori';
   description: string;
-  fit: 'regular' | 'oversize' | 'slim' | 'comfy';
+  fit: string; // Base fit description
   printArea: string;
   icon: string;
   customizations?: MockupCustomization[];
 }
 
-export const productCategories: MockupProduct['category'][] = ['Tops', 'Felpe', 'Giacche & Outerwear', 'Pantaloni', 'Accessori'];
+export const productCategories: MockupProduct['category'][] = ['Tops', 'Felpe', 'Outerwear', 'Pantaloni', 'Accessori'];
+
+const fitCustomization: MockupCustomization = {
+    id: 'fit',
+    name: 'Fit',
+    defaultOptionId: 'tailored',
+    options: [
+        { id: 'baggy', name: 'Baggy Fit', description: 'Very loose, drop shoulder, extended length, oversized silhouette' },
+        { id: 'tailored', name: 'Tailored Fit', 'description': 'Structured, defined shoulders, shaped waist, classic fit' },
+        { id: 'crop', name: 'Crop Fit', 'description': 'Shortened length, ends above the waist or ankle' },
+        { id: 'skinny', name: 'Skinny Fit', 'description': 'Stretchy, form-fitting, follows the body shape' },
+    ]
+};
 
 export const products: MockupProduct[] = [
-  // Tops
-  { 
-    id: 't-shirt-basic', 
-    name: 'T-shirt Basica', 
-    category: 'Tops', 
-    description: 'Classic regular fit crew neck t-shirt', 
-    fit: 'regular', 
-    printArea: 'chest', 
-    icon: 'TshirtIcon',
-    customizations: [
-      {
-        id: 'collar',
-        name: 'Colletto',
-        defaultOptionId: 'crew',
-        options: [
-          { id: 'crew', name: 'Girocollo', description: 'Classic round crew neck' },
-          { id: 'v-neck', name: 'A V', description: 'V-neck collar' },
-        ],
-      },
-      {
-        id: 'fabric',
-        name: 'Tessuto',
-        defaultOptionId: 'standard',
-        options: [
-          { id: 'standard', name: 'Standard', description: 'Standard cotton fabric' },
-          { id: 'heavyweight', name: 'Heavyweight', description: 'Heavyweight, thick cotton fabric' },
-          { id: 'vintage', name: 'Vintage', description: 'Slightly faded, vintage-wash cotton fabric' },
-        ],
-      },
-    ],
-  },
-  { id: 't-shirt-oversize', name: 'T-shirt Oversize', category: 'Tops', description: 'Oversized t-shirt with dropped shoulders and a boxy fit', fit: 'oversize', printArea: 'chest', icon: 'OversizeTshirtIcon' },
-  { id: 't-shirt-crop', name: 'T-shirt Crop', category: 'Tops', description: 'Cropped length t-shirt with a streetwear fit', fit: 'regular', printArea: 'chest', icon: 'CropTopIcon' },
-  { id: 'polo', name: 'Polo', category: 'Tops', description: 'Classic polo shirt with a collar and button placket', fit: 'regular', printArea: 'left chest', icon: 'PoloIcon' },
-  { id: 'tank-top', name: 'Canotta', category: 'Tops', description: 'Sleeveless tank top with a regular fit', fit: 'regular', printArea: 'chest', icon: 'TankTopIcon' },
-  { id: 'longsleeve', name: 'Maniche Lunghe', category: 'Tops', description: 'Slim or regular fit long-sleeve t-shirt', fit: 'slim', printArea: 'chest', icon: 'LongsleeveIcon' },
-  { id: 'longsleeve-oversize', name: 'Longsleeve Oversize', category: 'Tops', description: 'Oversized long-sleeve t-shirt with a streetwear fit', fit: 'oversize', printArea: 'chest', icon: 'OversizeLongsleeveIcon' },
-  
-  // Felpe
-  { id: 'crewneck', name: 'Felpa Girocollo', category: 'Felpe', description: 'Classic crewneck sweatshirt without a hood', fit: 'regular', printArea: 'chest', icon: 'CrewneckIcon' },
-  { 
-    id: 'hoodie', 
-    name: 'Hoodie', 
-    category: 'Felpe', 
-    description: 'Classic hoodie with a kangaroo pocket and drawstring hood', 
-    fit: 'regular', 
-    printArea: 'chest', 
-    icon: 'HoodieIcon',
-    customizations: [
-        {
-            id: 'pocket',
-            name: 'Tasca',
-            defaultOptionId: 'kangaroo',
-            options: [
-                { id: 'kangaroo', name: 'Canguro', description: 'With a classic front kangaroo pocket' },
-                { id: 'none', name: 'Senza Tasca', description: 'Without a front pocket for a cleaner look' },
-            ],
-        },
-        {
-            id: 'drawstrings',
-            name: 'Lacci Cappuccio',
-            defaultOptionId: 'with',
-            options: [
-                { id: 'with', name: 'Con Lacci', description: 'With standard hood drawstrings' },
-                { id: 'without', name: 'Senza Lacci', description: 'Without hood drawstrings for a minimalist style' },
-            ],
-        },
-    ]
-  },
-  { id: 'hoodie-oversize', name: 'Hoodie Oversize', category: 'Felpe', description: 'Oversized hoodie with a loose fit and extended length', fit: 'oversize', printArea: 'chest', icon: 'OversizeHoodieIcon' },
-  { id: 'hoodie-zip-up', name: 'Hoodie Zip-up', category: 'Felpe', description: 'Full zip-up hoodie', fit: 'regular', printArea: 'left chest or back', icon: 'ZipHoodieIcon' },
-  { id: 'half-zip', name: 'Half-zip Sweatshirt', category: 'Felpe', description: 'Sweatshirt with a short zipper at the neck', fit: 'regular', printArea: 'left chest', icon: 'HalfZipIcon' },
-  
-  // Giacche & Outerwear
-  { id: 'bomber-jacket', name: 'Bomber Jacket', category: 'Giacche & Outerwear', description: 'Classic bomber jacket with a front zip and elastic cuffs', fit: 'regular', printArea: 'back', icon: 'BomberJacketIcon' },
-  { id: 'denim-jacket', name: 'Denim Jacket', category: 'Giacche & Outerwear', description: 'Classic denim jacket with front buttons', fit: 'regular', printArea: 'back', icon: 'DenimJacketIcon' },
-  { id: 'coach-jacket', name: 'Coach Jacket', category: 'Giacche & Outerwear', description: 'Sporty coach jacket with snap buttons', fit: 'regular', printArea: 'back', icon: 'CoachJacketIcon' },
-  { id: 'windbreaker', name: 'Windbreaker', category: 'Giacche & Outerwear', description: 'Lightweight nylon windbreaker jacket', fit: 'regular', printArea: 'chest or back', icon: 'WindbreakerIcon' },
-  { id: 'puffer-jacket', name: 'Puffer Jacket', category: 'Giacche & Outerwear', description: 'Quilted, insulated puffer jacket', fit: 'regular', printArea: 'left chest', icon: 'PufferJacketIcon' },
-  { id: 'varsity-jacket', name: 'Varsity Jacket', category: 'Giacche & Outerwear', description: 'College-style varsity jacket with contrasting sleeves', fit: 'regular', printArea: 'left chest and back', icon: 'VarsityJacketIcon' },
-  
-  // Pantaloni
-  { id: 'cargo-pants', name: 'Cargo Pants', category: 'Pantaloni', description: 'Comfortable fit cargo pants with multiple side pockets', fit: 'comfy', printArea: 'side pocket', icon: 'CargoPantsIcon' },
-  { id: 'joggers', name: 'Joggers', category: 'Pantaloni', description: 'Sporty joggers with elastic ankle cuffs', fit: 'comfy', printArea: 'thigh', icon: 'JoggersIcon' },
-  { id: 'sweatpants', name: 'Sweatpants', category: 'Pantaloni', description: 'Classic cotton fleece sweatpants', fit: 'comfy', printArea: 'thigh', icon: 'SweatpantsIcon' },
-  {
-    id: 'jeans-straight',
-    name: 'Jeans Straight',
-    category: 'Pantaloni',
-    description: 'Classic straight-cut jeans',
-    fit: 'regular',
-    printArea: 'back pocket',
-    icon: 'JeansIcon',
-    customizations: [
-      {
-        id: 'wear',
-        name: 'Usura',
-        defaultOptionId: 'none',
-        options: [
-          { id: 'none', name: 'Nessuna', description: 'Clean, new denim with no wear' },
-          { id: 'light', name: 'Leggermente Strappati', description: 'Lightly distressed with some rips and fading' },
-        ],
-      },
-    ],
-  },
-  { id: 'jeans-slim', name: 'Jeans Slim', category: 'Pantaloni', description: 'Slim fit jeans, not skinny', fit: 'slim', printArea: 'back pocket', icon: 'SlimJeansIcon' },
-  { id: 'shorts-cargo', name: 'Shorts Cargo', category: 'Pantaloni', description: 'Shorts with multiple side pockets', fit: 'comfy', printArea: 'side pocket', icon: 'CargoShortsIcon' },
-  { id: 'shorts-basketball', name: 'Basketball Shorts', category: 'Pantaloni', description: 'Wide, technical fabric basketball shorts', fit: 'comfy', printArea: 'lower leg', icon: 'BasketballShortsIcon' },
+  // FELPE
+  { id: 'hoodie-classic', name: 'Classic Hoodie', category: 'Felpe', description: 'Classic pullover hoodie with kangaroo pocket', fit: 'Tailored', printArea: 'Chest, Back', icon: 'HoodieIcon', customizations: [fitCustomization] },
+  { id: 'hoodie-zip-up', name: 'Zip-Up Hoodie', category: 'Felpe', description: 'Full zip-up hoodie', fit: 'Tailored', printArea: 'Left Chest, Back', icon: 'ZipHoodieIcon', customizations: [fitCustomization] },
+  { id: 'hoodie-half-zip', name: 'Half-Zip Sweatshirt', category: 'Felpe', description: 'Pullover with a half-zip collar', fit: 'Tailored', printArea: 'Left Chest', icon: 'HalfZipIcon', customizations: [fitCustomization] },
+  { id: 'crewneck-classic', name: 'Classic Crewneck', category: 'Felpe', description: 'Classic crewneck sweatshirt', fit: 'Tailored', printArea: 'Chest, Back', icon: 'CrewneckIcon', customizations: [fitCustomization] },
 
-  // Accessori
-  { id: 'dad-hat', name: 'Cappellino Baseball', category: 'Accessori', description: 'Classic curved-brim baseball cap', fit: 'regular', printArea: 'front panel', icon: 'DadHatIcon' },
-  { id: 'beanie', name: 'Beanie', category: 'Accessori', description: 'Cotton or wool beanie', fit: 'regular', printArea: 'front cuff', icon: 'BeanieIcon' },
-  { id: 'bucket-hat', name: 'Bucket Hat', category: 'Accessori', description: 'Trendy bucket hat', fit: 'regular', printArea: 'front', icon: 'BucketHatIcon' },
-  { id: 'snapback', name: 'Snapback', category: 'Accessori', description: 'Flat-brim snapback cap', fit: 'regular', printArea: 'front panel', icon: 'SnapbackIcon' },
-  { id: 'backpack', name: 'Zaino', category: 'Accessori', description: 'Urban streetwear backpack', fit: 'regular', printArea: 'front panel', icon: 'BackpackIcon' },
-  { id: 'crossbody-bag', name: 'Borsa Tracolla', category: 'Accessori', description: 'Crossbody or messenger bag', fit: 'regular', printArea: 'front', icon: 'CrossbodyBagIcon' },
-  { id: 'tote-bag', name: 'Tote Bag', category: 'Accessori', description: 'Unisex shopper tote bag', fit: 'regular', printArea: 'main side', icon: 'ToteBagIcon' },
+  // PANTALONI
+  { id: 'pants-cargo', name: 'Cargo Pants', category: 'Pantaloni', description: 'Pants with large side pockets', fit: 'Baggy', printArea: 'Side Pocket, Thigh', icon: 'CargoPantsIcon', customizations: [fitCustomization] },
+  { id: 'pants-track', name: 'Trackpants', category: 'Pantaloni', description: 'Athletic-style trackpants or joggers', fit: 'Tailored', printArea: 'Thigh', icon: 'JoggersIcon', customizations: [fitCustomization] },
+  { id: 'pants-denim-straight', name: 'Straight Jeans', category: 'Pantaloni', description: 'Classic straight-leg denim jeans', fit: 'Tailored', printArea: 'Back Pocket, Thigh', icon: 'JeansIcon', customizations: [fitCustomization] },
+  { id: 'pants-denim-wide', name: 'Wide-Leg Jeans', category: 'Pantaloni', description: 'Denim jeans with a wide-leg cut', fit: 'Baggy', printArea: 'Back Pocket', icon: 'SweatpantsIcon', customizations: [fitCustomization] },
+
+  // OUTERWEAR
+  { id: 'outerwear-puffer-vest', name: 'Puffer Vest', category: 'Outerwear', description: 'Sleeveless insulated puffer vest', fit: 'Tailored', printArea: 'Left Chest, Back', icon: 'PufferJacketIcon', customizations: [fitCustomization] },
+  { id: 'outerwear-bomber', name: 'Bomber Jacket', category: 'Outerwear', description: 'Classic bomber jacket with zip front', fit: 'Tailored', printArea: 'Left Chest, Back', icon: 'BomberJacketIcon', customizations: [fitCustomization] },
+  { id: 'outerwear-denim-jacket', name: 'Denim Jacket', category: 'Outerwear', description: 'Button-up denim jacket', fit: 'Tailored', printArea: 'Back, Cuffs', icon: 'DenimJacketIcon', customizations: [fitCustomization] },
+  { id: 'outerwear-windbreaker', name: 'Windbreaker', category: 'Outerwear', description: 'Lightweight windbreaker jacket', fit: 'Tailored', printArea: 'Chest, Back', icon: 'WindbreakerIcon', customizations: [fitCustomization] },
+  { id: 'outerwear-varsity', name: 'Varsity Jacket', category: 'Outerwear', description: 'College-style varsity jacket', fit: 'Tailored', printArea: 'Chest, Back, Sleeves', icon: 'VarsityJacketIcon', customizations: [fitCustomization] },
+
+  // TOPS
+  { id: 't-shirt-basic', name: 'Basic T-Shirt', category: 'Tops', description: 'Classic crew neck t-shirt', fit: 'Tailored', printArea: 'Chest, Back', icon: 'TshirtIcon', customizations: [fitCustomization] },
+  { id: 't-shirt-longsleeve', name: 'Longsleeve T-Shirt', category: 'Tops', description: 'Long-sleeve crew neck t-shirt', fit: 'Tailored', printArea: 'Chest, Back, Sleeves', icon: 'LongsleeveIcon', customizations: [fitCustomization] },
+  { id: 'polo-shirt', name: 'Polo Shirt', category: 'Tops', description: 'Collared polo shirt with button placket', fit: 'Tailored', printArea: 'Left Chest', icon: 'PoloIcon', customizations: [fitCustomization] },
+  { id: 'tank-top', name: 'Tank Top', category: 'Tops', description: 'Sleeveless tank top', fit: 'Skinny', printArea: 'Chest', icon: 'TankTopIcon', customizations: [fitCustomization] },
+  { id: 'button-up-shirt', name: 'Button-Up Shirt', category: 'Tops', description: 'Classic long-sleeve button-up shirt', fit: 'Tailored', printArea: 'Pocket, Back', icon: 'OversizeLongsleeveIcon', customizations: [fitCustomization] },
+
+  // ACCESSORI (No fit customization)
+  { id: 'accessory-socks', name: 'Crew Socks', category: 'Accessori', description: 'Crew-length socks', fit: 'N/A', printArea: 'Side, Top', icon: 'TshirtIcon' }, // Placeholder icon
+  { id: 'accessory-boxers', name: 'Boxer Briefs', category: 'Accessori', description: 'Classic boxer briefs', fit: 'N/A', printArea: 'Waistband', icon: 'BasketballShortsIcon' }, // Placeholder icon
+  { id: 'accessory-tote-bag', name: 'Tote Bag', category: 'Accessori', description: 'Canvas tote bag', fit: 'N/A', printArea: 'Main Side', icon: 'ToteBagIcon' },
+  { id: 'accessory-crossbody-bag', name: 'Crossbody Bag', category: 'Accessori', description: 'Small crossbody bag', fit: 'N/A', printArea: 'Front', icon: 'CrossbodyBagIcon' },
+  { id: 'accessory-backpack', name: 'Backpack', category: 'Accessori', description: 'Standard backpack', fit: 'N/A', printArea: 'Front Pocket, Top', icon: 'BackpackIcon' },
+  { id: 'accessory-dad-hat', name: 'Dad Hat', category: 'Accessori', description: 'Curved brim baseball cap', fit: 'N/A', printArea: 'Front', icon: 'DadHatIcon' },
 ];

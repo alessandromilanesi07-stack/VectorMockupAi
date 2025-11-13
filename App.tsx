@@ -1,14 +1,14 @@
+
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MockupStudio } from './components/VectorWrapStudio';
 import { ImageEditor } from './components/ImageEditor';
 import { ImageGenerator } from './components/ImageGenerator';
-import { ThinkingMode } from './components/ThinkingMode';
-import { Search } from './components/Search';
 import { SketchToMockup } from './components/SketchToMockup';
 import { BrandKit } from './components/BrandKit';
 import { TrendForecaster } from './components/TrendForecaster';
 import { Copywriter } from './components/Copywriter';
+import { Sourcing } from './components/Sourcing';
 import type { View, Brand, SavedProduct } from './types';
 
 const App: React.FC = () => {
@@ -52,14 +52,12 @@ const App: React.FC = () => {
         />;
       case 'generator':
         return <ImageGenerator />;
-      case 'thinking':
-        return <ThinkingMode />;
-      case 'search':
-        return <Search />;
       case 'trends':
         return <TrendForecaster />;
       case 'copywriter':
         return <Copywriter activeBrand={activeBrand} />;
+      case 'sourcing':
+        return <Sourcing />;
       default:
         return <MockupStudio 
           setCurrentView={setCurrentView} 

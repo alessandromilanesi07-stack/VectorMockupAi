@@ -24,6 +24,10 @@ export const FEATURE_DESCRIPTIONS: Feature[] = [
         ]
     },
     {
+        name: "Sourcing Database",
+        description: "An integrated database of vetted apparel manufacturers from around the globe. Users can filter by location, Minimum Order Quantity (MOQ), product specialization, and certifications to find the perfect production partner. It provides a seamless workflow from design to sourcing."
+    },
+    {
         name: "Sketch to Mockup",
         description: "Transforms a user's rough hand-drawn sketch or digital wireframe into a polished, clean mockup. For example, a drawing of a pair of jeans can become a technical flat sketch."
     },

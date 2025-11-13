@@ -1,6 +1,7 @@
+
 import React from 'react';
 import type { View, Brand } from '../types';
-import { StudioIcon, EditIcon, GenerateIcon, ThinkIcon, SearchIcon, LogoIcon, SketchIcon, BrandIcon, TrendIcon, CopywriterIcon, PlusIcon } from './Icons';
+import { StudioIcon, EditIcon, GenerateIcon, LogoIcon, SketchIcon, BrandIcon, TrendIcon, CopywriterIcon, PlusIcon, SourcingIcon } from './Icons';
 
 interface SidebarProps {
   currentView: View;
@@ -74,14 +75,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, b
         </div>
         <nav className="space-y-2">
           <NavItem view="studio" label="Mockup Studio" icon={<StudioIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+          <NavItem view="sourcing" label="Sourcing Database" icon={<SourcingIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="sketch" label="Sketch to Mockup" icon={<SketchIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="brand" label="Brand Kit" icon={<BrandIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="trends" label="Trend Forecaster" icon={<TrendIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="copywriter" label="AI Copywriter" icon={<CopywriterIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="editor" label="Social Post Composer" icon={<EditIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="generator" label="Image Generator" icon={<GenerateIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="thinking" label="Thinking Mode" icon={<ThinkIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="search" label="Grounded Search" icon={<SearchIcon />} currentView={currentView} setCurrentView={setCurrentView} />
         </nav>
          <BrandHubSelector 
             brands={brands} 

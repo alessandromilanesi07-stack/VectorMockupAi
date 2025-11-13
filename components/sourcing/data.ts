@@ -1,0 +1,178 @@
+import type { Manufacturer } from '../../types';
+
+export const manufacturers: Manufacturer[] = [
+  {
+    id: 'pt-porto-01',
+    name: 'Porto Apparel Group',
+    country: 'Portugal',
+    city: 'Porto',
+    region: 'Europe',
+    yearFounded: 2005,
+    employees: '150-200',
+    certifications: ['OEKO-TEX', 'GOTS', 'ISO9001'],
+    specializations: {
+      productCategories: ['Hoodies', 'T-Shirts', 'Sweatpants', 'Knitwear'],
+      productionTechniques: ['Cut & Sew', 'High-Quality Screen Print', 'Embroidery'],
+      materials: ['Organic Cotton', 'Heavyweight Fleece', 'French Terry'],
+    },
+    productionData: {
+      moq: { value: 150, category: 'Startup Friendly' },
+      leadTime: '30-45 days',
+      monthlyCapacity: '30,000 pcs/month',
+      sampleTime: '7-10 days',
+    },
+    pricing: {
+      range: '$$',
+      examples: [{ item: 'T-shirt', cost: '$10-15' }, { item: 'Hoodie', cost: '$22-30' }],
+      paymentTerms: '50% deposit, 50% on completion',
+    },
+    brandReferences: [
+      { tier: 2, name: 'Represent' },
+      { tier: 2, name: 'Corteiz' },
+      { tier: 3, name: 'Various emerging streetwear brands' },
+    ],
+    contact: {
+      email: 'sales@portoapparel.pt',
+      website: 'https://portoapparel.pt',
+    },
+  },
+  {
+    id: 'tr-istanbul-01',
+    name: 'Istanbul Denim Co.',
+    country: 'Turkey',
+    city: 'Istanbul',
+    region: 'Europe',
+    yearFounded: 1998,
+    employees: '500+',
+    certifications: ['BSCI', 'SEDEX'],
+    specializations: {
+      productCategories: ['Denim', 'Jackets', 'Pants'],
+      productionTechniques: ['Denim Washing', 'Laser Engraving', 'Cut & Sew'],
+      materials: ['Selvedge Denim', 'Recycled Cotton', 'Stretch Denim'],
+    },
+    productionData: {
+      moq: { value: 500, category: 'Standard Production' },
+      leadTime: '45-60 days',
+      monthlyCapacity: '100,000 pcs/month',
+      sampleTime: '10-15 days',
+    },
+    pricing: {
+      range: '$$',
+      examples: [{ item: 'Jeans', cost: '$18-25' }, { item: 'Denim Jacket', cost: '$25-35' }],
+      paymentTerms: '40% deposit, 60% before shipping',
+    },
+    brandReferences: [
+      { tier: 2, name: 'Contemporary EU Brands' },
+      { tier: 3, name: 'Stüssy Collaborators' },
+    ],
+    contact: {
+      email: 'contact@istanbuldenim.com',
+      website: 'https://istanbuldenim.com',
+    },
+  },
+  {
+    id: 'cn-guangdong-01',
+    name: 'Guangdong Techwear Solutions',
+    country: 'China',
+    city: 'Guangdong',
+    region: 'Asia',
+    yearFounded: 2012,
+    employees: '300-400',
+    certifications: ['ISO9001', 'WRAP'],
+    specializations: {
+      productCategories: ['Outerwear', 'Technical Pants', 'Bags'],
+      productionTechniques: ['Seam Sealing', 'Complex Cut & Sew', 'DTG'],
+      materials: ['Gore-Tex (licensed)', 'Nylon', 'Technical Fabrics'],
+    },
+    productionData: {
+      moq: { value: 300, category: 'Small Batch' },
+      leadTime: '60-90 days',
+      monthlyCapacity: '40,000 pcs/month',
+      sampleTime: '15-20 days',
+    },
+    pricing: {
+      range: '$$$',
+      examples: [{ item: 'Windbreaker', cost: '$30-45' }, { item: 'Cargo Pants', cost: '$25-38' }],
+      paymentTerms: '50% deposit, 50% before shipping',
+    },
+    brandReferences: [
+      { tier: 1, name: 'Acne Studios (specific lines)' },
+      { tier: 2, name: 'High-End Streetwear Labels' },
+    ],
+    contact: {
+      email: 'info@gdw-tech.cn',
+      website: 'https://gdw-tech.cn',
+      whatsapp: '+8613800138000',
+    },
+  },
+   {
+    id: 'us-la-01',
+    name: 'Los Angeles Basics',
+    country: 'USA',
+    city: 'Los Angeles',
+    region: 'America',
+    yearFounded: 2010,
+    employees: '50-100',
+    certifications: ['Made in USA'],
+    specializations: {
+      productCategories: ['T-Shirts', 'Hoodies', 'Sweatpants'],
+      productionTechniques: ['Garment Dyeing', 'Screen Print', 'DTG'],
+      materials: ['USA-grown Cotton', 'Fleece'],
+    },
+    productionData: {
+      moq: { value: 200, category: 'Startup Friendly' },
+      leadTime: '20-30 days',
+      monthlyCapacity: '25,000 pcs/month',
+      sampleTime: '7-10 days',
+    },
+    pricing: {
+      range: '$$$',
+      examples: [{ item: 'T-shirt', cost: '$12-18' }, { item: 'Hoodie', cost: '$28-40' }],
+      paymentTerms: '50% upfront, 50% on completion',
+    },
+    brandReferences: [
+      { tier: 1, name: 'Fear of God (Essentials)' },
+      { tier: 2, name: 'Gallery Dept' },
+      { tier: 3, name: 'Premium LA-based startups' },
+    ],
+    contact: {
+      email: 'orders@labasics.com',
+      website: 'https://labasics.com',
+    },
+  },
+  {
+    id: 'it-milan-01',
+    name: 'Milano Luxury Group',
+    country: 'Italy',
+    city: 'Milan',
+    region: 'Europe',
+    yearFounded: 1985,
+    employees: '100-150',
+    certifications: ['Made in Italy'],
+    specializations: {
+      productCategories: ['Outerwear', 'Leather Goods', 'Tailored Trousers'],
+      productionTechniques: ['Fine Tailoring', 'Leatherwork', 'Complex Cut & Sew'],
+      materials: ['Italian Leather', 'Wool', 'Luxury Fabrics'],
+    },
+    productionData: {
+      moq: { value: 50, category: 'Startup Friendly' },
+      leadTime: '60-90 days',
+      monthlyCapacity: '5,000 pcs/month',
+      sampleTime: '15-20 days',
+    },
+    pricing: {
+      range: '$$$',
+      examples: [{ item: 'Jacket', cost: '$100-200' }, { item: 'Trousers', cost: '$60-90' }],
+      paymentTerms: '50% deposit, 50% before shipping',
+    },
+    brandReferences: [
+      { tier: 1, name: 'Off-White' },
+      { tier: 1, name: 'Balenciaga (specific items)' },
+      { tier: 2, name: 'High-end contemporary brands' },
+    ],
+    contact: {
+      email: 'studio@mlg.it',
+      website: 'https://mlg.it',
+    },
+  },
+];

@@ -37,6 +37,14 @@ export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     </svg>
 );
 
+export const SourcingIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h10a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.7 9.3l.065.055a2 2 0 012.37 2.485l-.035.13a2 2 0 001.176 1.996l.14.043a2 2 0 011.996-1.176l.036-.131a2 2 0 00-2.485-2.37l-.055-.065m-5 5l-1.414-1.414" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 13v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5m14 0-2.086-2.086a2 2 0 00-2.828 0L12 13.828l-2.086-2.086a2 2 0 00-2.828 0L5 13.828m14 0l-2.086 2.086a2 2 0 01-2.828 0L12 13.828l-2.086 2.086a2 2 0 01-2.828 0L5 13.828" />
+    </svg>
+);
+
+
 export const UploadIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1} {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
