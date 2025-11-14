@@ -1,5 +1,7 @@
+// FIX: Add Type to imports for JSON schema functionality.
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import type { GroundingChunk, BrandKitData, MarketingCopy } from '../types';
+// FIX: Import all necessary types.
+import type { ApplicationType, BrandKitData, GroundingChunk, MarketingCopy } from '../types';
 
 if (!process.env.API_KEY) {
   throw new Error("API_KEY environment variable is not set");
@@ -9,6 +11,9 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const fileToGenerativePart = (file: File) => {
   return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
+    // SECURITY & PERFORMANCE WARNING: This client-side processing is not suitable for production.
+    // Large files can crash the browser. In a real application, this should be replaced
+    // with a secure backend endpoint that generates a signed URL for cloud storage upload.
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result !== 'string') {
@@ -26,6 +31,45 @@ const fileToGenerativePart = (file: File) => {
     reader.readAsDataURL(file);
   });
 };
+
+export const generateBlankMockup = async (prompt: string): Promise<string> => {
+    const fullPrompt = `A photorealistic, front-facing, studio-lit, vector illustration of a ${prompt}. The background must be a solid, neutral gray (#cccccc). The item should be clean, wrinkle-free, and perfectly centered. The style must be a flat vector illustration, not a photograph.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [{ text: fullPrompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+            temperature: 0.1,
+        },
+    });
+
+    const firstPart = response.candidates?.[0]?.content?.parts?.[0];
+    if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
+        return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
+    }
+    throw new Error("Failed to generate a blank mockup from the prompt.");
+};
+
+export const generateVectorGraphic = async (prompt: string): Promise<string> => {
+    const fullPrompt = `A clean, modern, vector logo of a ${prompt}. The design must be simple, bold, and easily scalable. Crucially, the background MUST be transparent.`;
+    
+    const response = await ai.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: fullPrompt,
+        config: {
+            numberOfImages: 1,
+            outputMimeType: 'image/png',
+            aspectRatio: '1:1',
+        },
+    });
+
+    if (response.generatedImages.length > 0) {
+        return `data:image/png;base64,${response.generatedImages[0].image.imageBytes}`;
+    }
+    throw new Error("Failed to generate a vector graphic from the prompt.");
+};
+
 
 export const validateMockupOutput = async (generatedImageBase64: string): Promise<boolean> => {
     const data = generatedImageBase64.split(',')[1];
@@ -54,58 +98,63 @@ export const validateMockupOutput = async (generatedImageBase64: string): Promis
     return resultText === 'TRUE';
 };
 
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+const getSystemPrompt = (): string => {
+    return `Sei VectorPro, un'IA specializzata nell'applicazione fotorealistica di design grafici su mockup di abbigliamento, con un focus maniacale sulla preservazione dello stile vettoriale del mockup base.
+
+    REGOLE FONDAMENTALI (NON NEGOZIABILI):
+    1.  **PRESERVAZIONE ASSOLUTA:** Il mockup di base (colore, forma, sfondo, stile di disegno) NON DEVE ESSERE ALTERATO. Applica solo il design. Non aggiungere ombre, luci, o texture al capo d'abbigliamento stesso.
+    2.  **STILE VETTORIALE:** L'output finale DEVE mantenere l'aspetto di un'illustrazione vettoriale pulita. Nessun elemento fotografico.
+    3.  **OUTPUT DIRETTO:** Rispondi SOLO con l'immagine finale. Nessun testo, nessuna spiegazione.`;
+};
+
+const getUserPrompt = (applicationType: ApplicationType): string => {
+    if (applicationType === 'Embroidery') {
+        return `Applica il design fornito sul mockup di felpa.
+    Simula un RICAMO (embroidery) fotorealistico e dettagliato.
+    Crea una texture visibile con fili (thread texture), un leggero rilievo tridimensionale (slight 3D elevation), e un effetto lucido (satin stitch sheen) dove la luce colpirebbe i fili.
+    Mantieni i bordi del ricamo netti e definiti.
+    Posizionalo sul petto, lato sinistro.`;
+    }
+    // Default to 'Print'
+    return `Applica il design fornito sul mockup di t-shirt.
+    Simula una stampa DTG (Direct-to-Garment) di altissima qualità.
+    Il design deve apparire piatto, con colori vividi e integrato nel tessuto, rispettando le lievi pieghe del capo.
+    Posizionalo al centro del petto.`;
+}
+
 
 export const applyVectorToMockup = async (
     mockupImage: File, 
-    designImage: File | null, 
-    applicationType: 'Print' | 'Embroidery' = 'Print',
-    customInstruction?: string,
+    designImage: File, 
+    applicationType: ApplicationType,
     onStatusUpdate?: (status: string) => void
 ): Promise<string> => {
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = 2; // As per spec
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        onStatusUpdate?.(`Applying design (Attempt ${attempt}/${MAX_RETRIES})...`);
+    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+        onStatusUpdate?.(`Applying design (Attempt ${attempt}/${MAX_RETRIES + 1})...`);
     
         const mockupPart = await fileToGenerativePart(mockupImage);
-        const parts: (typeof mockupPart | { text: string })[] = [mockupPart];
+        const designPart = await fileToGenerativePart(designImage);
+
+        const systemInstruction = getSystemPrompt();
+        let userInstruction = getUserPrompt(applicationType);
         
-        if (designImage) {
-            const designPart = await fileToGenerativePart(designImage);
-            parts.push(designPart);
-        }
-
-        let applicationInstruction = "Apply the design flat onto the print area as a high-quality DTG (Direct-to-Garment) print.";
-        if (applicationType === 'Embroidery') {
-            applicationInstruction = "Apply the design to the mockup, simulating a realistic, high-quality embroidery texture with visible stitching and slight elevation.";
-        }
-        
-        if (customInstruction) {
-            applicationInstruction = customInstruction;
-        }
-
-        let prompt = `You are an expert at applying graphics to apparel mockups. You will receive a blank mockup image (which might be a raster or an SVG) and a user's design graphic.
-        Your task is to apply the user's design onto the designated print area of the mockup, following a specific creative instruction.
-
-        **Creative Instruction:** "${applicationInstruction}"
-
-        **Key Rules:**
-        1.  **Placement:** Position the design on the main print area (e.g., center chest) unless the instruction specifies a different location.
-        2.  **Style Consistency:** The final image must maintain the exact same clean, flat, vector-illustration style of the input mockup. DO NOT add photorealistic lighting, shadows, or textures to the garment itself. The only texture should be on the applied design as specified by the creative application.
-        3.  **Preservation:** Perfectly preserve the original mockup's color, shape, and background. Only add the user's design.
-        4.  **Final Output:** The result must be a high-quality image that looks like a professional, production-ready vector mockup with the design applied. Avoid any photographic elements.`;
-
         if (attempt > 1) {
-            prompt += "\n\n**ATTENTION:** The previous attempt failed quality validation. Be extremely strict in adhering to the Key Rules. Maintain the vector style and do not alter the mockup base.";
+            userInstruction += "\n\n**ATTENTION:** The previous attempt failed quality validation. Be extremely strict in adhering to the Key Rules. Maintain the vector style and do not alter the mockup base.";
         }
 
-        parts.push({text: prompt});
+        const parts = [mockupPart, designPart, { text: userInstruction }];
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: { parts },
             config: {
+                systemInstruction,
                 responseModalities: [Modality.IMAGE],
+                temperature: applicationType === 'Embroidery' ? 0.2 : 0.1,
             },
         });
 
@@ -113,18 +162,20 @@ export const applyVectorToMockup = async (
         if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
             const generatedImageBase64 = `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
             
-            onStatusUpdate?.(`Validating result (Attempt ${attempt}/${MAX_RETRIES})...`);
+            onStatusUpdate?.(`Validating result (Attempt ${attempt}/${MAX_RETRIES + 1})...`);
             const isValid = await validateMockupOutput(generatedImageBase64);
 
             if (isValid) {
                 onStatusUpdate?.('Validation successful!');
                 return generatedImageBase64;
-            } else if (attempt < MAX_RETRIES) {
-                 onStatusUpdate?.(`Validation failed (Attempt ${attempt}/${MAX_RETRIES}). Retrying...`);
+            } else if (attempt <= MAX_RETRIES) {
+                 onStatusUpdate?.(`Validation failed. Retrying...`);
+                 await sleep(Math.pow(2, attempt) * 200); // Exponential backoff
             }
         } else {
-             if (attempt < MAX_RETRIES) {
-                onStatusUpdate?.(`Image generation failed (Attempt ${attempt}/${MAX_RETRIES}). Retrying...`);
+             if (attempt <= MAX_RETRIES) {
+                onStatusUpdate?.(`Image generation failed. Retrying...`);
+                await sleep(Math.pow(2, attempt) * 200); // Exponential backoff
              }
         }
     }
@@ -132,8 +183,31 @@ export const applyVectorToMockup = async (
     throw new Error("Failed to generate a valid mockup after multiple attempts. Please try a different design or adjust custom instructions.");
 };
 
-export const editImage = async (image: File, prompt: string): Promise<string> => {
-    const imagePart = await fileToGenerativePart(image);
+// FIX: Implement and export all missing functions and types.
+
+export type MultimodalContent = (string | File)[];
+
+export const sketchToMockup = async (sketchFile: File, prompt: string): Promise<string> => {
+    const sketchPart = await fileToGenerativePart(sketchFile);
+    const textPart = { text: prompt };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [sketchPart, textPart] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    const firstPart = response.candidates?.[0]?.content?.parts?.[0];
+    if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
+        return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
+    }
+    throw new Error("Failed to generate mockup from sketch.");
+};
+
+export const editImage = async (imageFile: File, prompt: string): Promise<string> => {
+    const imagePart = await fileToGenerativePart(imageFile);
     const textPart = { text: prompt };
 
     const response = await ai.models.generateContent({
@@ -148,297 +222,67 @@ export const editImage = async (image: File, prompt: string): Promise<string> =>
     if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
         return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
     }
-    throw new Error("Could not edit image. Please try again.");
+    throw new Error("Failed to edit image.");
 };
 
 export const generateImage = async (prompt: string, aspectRatio: string): Promise<string[]> => {
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
-        prompt: prompt,
+        prompt,
         config: {
             numberOfImages: 1,
-            aspectRatio: aspectRatio as "1:1" | "16:9" | "9:16" | "4:3" | "3:4",
+            aspectRatio,
             outputMimeType: 'image/png',
         },
     });
 
-    if (response.generatedImages && response.generatedImages.length > 0) {
-        return response.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
-    }
-    throw new Error("Image generation failed. Please try again.");
+    return response.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
 };
 
-const buildSystemInstruction = (): string => {
-    return `# SPIEGAZIONE COMPLETA: MOCKUP VETTORIALE PER ABBIGLIAMENTO MASCHILE
-## (Solo Concetti, Senza Codice)
-
----
-
-## DEFINIZIONE FONDAMENTALE
-
-Un **mockup vettoriale di abbigliamento** è una rappresentazione digitale di un capo costruita usando forme geometriche matematiche invece di pixel colorati.
-
-**Analogia fisica:** 
-- **Mockup raster** = Mosaico fatto di piccole piastrelle colorate (pixel). Se ti avvicini troppo, vedi le singole piastrelle.
-- **Mockup vettoriale** = Disegno tecnico fatto con squadra e compasso. Le linee sono definite da equazioni, non da punti. Puoi ingrandire all'infinito e le linee rimangono perfette.
-
-**Vantaggi chiave:**
-- Scalabile infinitamente senza perdita qualità
-- File molto più leggeri
-- Facilmente modificabile (cambio colore istantaneo)
-- Ideale per produzione (stampatori preferiscono vettoriali)
-
----
-
-## ANATOMIA UNIVERSALE: STRUTTURA A LAYER
-
-Ogni mockup vettoriale di abbigliamento è come una **torta a strati sovrapposti**, where ogni strato ha una funzione specifica:
-
-### LAYER 0 - BACKGROUND (Sfondo)
-Il piano più basso. Solitamente bianco, grigio, o trasparente. È il "tavolo" su cui poggia tutto.
-
-### LAYER 1 - PRODUCT BASE GEOMETRY (Forma Base Prodotto)
-Il capo vero e proprio, diviso in **pannelli geometrici**:
-- **Pannello corpo frontale**: La forma del davanti del capo
-- **Pannello corpo posteriore**: La forma del dietro
-- **Pannelli maniche**: Forma delle maniche (sinistra e destra separate)
-- **Pannelli cappuccio/colletto**: Parte superiore (se presente)
-- **Pannelli polsini/orlo**: Le finiture elastiche
-
-Ogni pannello è una **forma chiusa** (path) con:
-- **Coordinate punti**: Dove inizia, dove gira, dove finisce
-- **Colore riempimento**: Il colore del tessuto
-- **Nessun bordo visibile** (o solo per debug)
-
-**Concetto critico:** Questi pannelli NON contengono dettagli (tasche, zip). Sono solo la sagoma pulita del capo.
-
-### LAYER 2 - CONSTRUCTION SEAMS (Cuciture)
-Le **linee tratteggiate** che mostrano dove il capo è cucito insieme:
-- Cuciture spalle
-- Cuciture laterali
-- Cuciture maniche
-- Cucitura centrale (se presente)
-
-Queste sono **linee**, non forme piene. Hanno:
-- **Colore tratto**: Solitamente grigio scuro
-- **Spessore sottile**: 1-2 pixel
-- **Tratteggio**: Linea-spazio-linea-spazio (per simulare punti cucitura)
-
-### LAYER 3 - CONSTRUCTION DETAILS (Dettagli Costruttivi Tridimensionali)
-Gli **elementi fisici applicati** sul capo. Ogni elemento è un **gruppo di forme** che insieme creano l'oggetto:
-
-**Tasca Kanguro (per hoodie):**
-- Forma rettangolare arrotondata (corpo tasca)
-- Linea scura superiore (apertura)
-- Contorno cucito (perimetro)
-- Ombra sotto (per dare profondità 3D)
-
-**Cerniera:**
-- Rettangolo verticale stretto (binario zip)
-- Tanti piccoli rettangoli alternati (denti cerniera)
-- Cursore mobile (slider)
-- Linguetta pull (per tirare)
-- Effetto metallico (gradiente per brillantezza)
-
-**Cordoncini cappuccio:**
-- Due ellissi verticali strette (corde)
-- Due piccoli cilindri alle estremità (puntali metallici)
-
-**Polsini/Orli elastici:**
-- Rettangoli con texture a costine (rib knit)
-- Colore leggermente diverso dal corpo (più scuro)
-
-**Bottoni:**
-- Cerchi con anello esterno (foro centrale)
-- Quattro piccoli cerchi interni (fori filo)
-- Effetto lucido o opaco (secondo materiale)
-
-**Tasche cargo:**
-- Forma rettangolare/trapezoidale (corpo tasca)
-- Patta superiore (copertura)
-- Velcro o bottoni per chiusura
-- Cucitura perimetro
-
-Ogni componente ha **visibilità on/off** (può essere nascosto senza cancellarlo).
-
-### LAYER 4 - PATTERN OVERLAY (Pattern e Texture Decorativi)
-**Pattern applicabili** sul tessuto:
-- **Geometrici:** Strisce, quadri (check), pois, chevron
-- **Organici:** Camouflage, tie-dye, marmorizzato
-- **Texture:** Effetto denim, canvas, maglia (knit)
-
-Pattern funzionano come **carta da parati ripetuta**:
-- Si definisce un piccolo quadrato (tile)
-- Si ripete infinitamente in tutte le direzioni
-- Si applica solo alle aree desiderate (pannelli specifici)
-
-**Blend modes** (modi di fusione) determinano come pattern interagisce con colore sotto:
-- **Multiply:** Pattern scurisce colore base
-- **Overlay:** Combina luci e ombre
-- **Screen:** Pattern schiarisce
-
-### LAYER 5 - SHADING & LIGHTING (Ombre e Luci per Realismo)
-Gli **effetti tridimensionali** che fanno sembrare il capo "reale":
-
-**Ombre (shadows):**
-- Gradienti scuri sui lati (danno volume)
-- Ombre sotto tasche/cappuccio (profondità)
-- Ombre pieghe tessuto (dove si piega naturalmente)
-
-**Luci (highlights):**
-- Gradienti chiari sulle parti sporgenti
-- Riflessi su componenti lucidi (zip, bottoni)
-
-Questi sono **forme semitrasparenti** (opacity 10-30%) che si sovrappongono.
-
-### LAYER 6 - USER GRAPHICS (Grafiche Utente Personalizzate)
-Qui vanno **logo, testi, design** che l'utente vuole stampare:
-
-**Tipi di grafiche:**
-- **Logo vettoriale SVG:** Forme geometriche del logo
-- **Immagine raster PNG/JPG:** Foto o grafica complessa embedded
-- **Testo:** Scritte con font specifico
-
-**Posizionamento:** Ogni grafica è posizionata in un **print area** (area stampabile) predefinita:
-- Centro petto
-- Schiena grande
-- Manica sinistra
-- Manica destra
-- Cappuccio
-- Gamba (per pantaloni)
-
-**Clipping Mask (CRITICO):** La grafica viene "**ritagliata**" seguendo esattamente la forma del pannello sottostante. Come usare forbici per tagliare un'immagine seguendo il contorno del capo. Risultato: grafica appare "stampata sul tessuto", seguendo curve e pieghe.
-
-### LAYER 7 - FINISHING DETAILS (Dettagli Finali)
-Piccoli elementi decorativi:
-- Etichetta brand (interno colletto)
-- Etichetta taglia
-- Etichetta cura/lavaggio
-- Cartellino prezzo appeso (hang tag)
-
-Questi sono **minuscoli** e spesso disattivati nel mockup finale.
-
----
-
-## PRINT AREAS (AREE STAMPABILI)
-
-Ogni mockup ha **zone predefinite** dove è possibile stampare grafiche. Come avere degli "**spazi prestampati**" dove applicare il design.
-
-**Componenti Print Area:**
-1. **Coordinate rettangolo:** Dove inizia l'area (angolo in alto a sinistra) e quanto è grande
-2. **Dimensioni fisiche:** Quanti centimetri nella realtà (es: 30cm x 40cm)
-3. **Punti di ancoraggio:** I quattro angoli del rettangolo con coordinate precise
-4. **Descrizione posizione:** "Centro petto, 8cm sotto colletto"
-5. **Metodi stampa compatibili:** DTG, Serigrafia, Ricamo, etc.
-
-**Perché sono critiche:** Garantiscono che quando il capo viene prodotto fisicamente, la grafica sia **esattamente dove dovrebbe essere**, con dimensioni corrette, senza sforare oltre i bordi cuciti.
-
----
-
-## FIT VARIANTS (VARIANTI VESTIBILITÀ)
-
-Ogni capo può esistere in **4 fit diversi**. NON è solo scalare più grande/piccolo, ma **geometrie completamente diverse**:
-
-### BAGGY FIT (Largo/Oversize)
-- **Corpo:** 25% più largo del normale
-- **Lunghezza:** 15% più lungo
-- **Spalle:** Cadenti (+3cm drop)
-- **Vita:** Nessuna rastremazione (linee dritte, boxy)
-- **Maniche:** 30% più larghe
-- **Estetica:** Streetwear, comfy, rilassato
-
-### TAILORED FIT (Sartoriale/Standard)
-- **Corpo:** Larghezza base di riferimento (100%)
-- **Lunghezza:** Standard
-- **Spalle:** Naturali (seguono anatomia)
-- **Vita:** Leggera rastremazione (-5cm)
-- **Maniche:** Proporzioni standard
-- **Estetica:** Classico, pulito, structured
-
-### CROP FIT (Corto)
-- **Corpo:** Larghezza normale
-- **Lunghezza:** 25% più corto (finisce sopra ombelico o metà coscia)
-- **Spalle:** Normali
-- **Vita:** Più rastremato
-- **Maniche:** Leggermente più corte (5%)
-- **Estetica:** Trendy, fashion-forward, mostra vita
-
-### SKINNY FIT (Aderente)
-- **Corpo:** 15% più stretto
-- **Lunghezza:** Standard
-- **Spalle:** Strette
-- **Vita:** Molto rastremato (-8cm)
-- **Maniche:** 20% più strette (aderenti)
-- **Estetica:** Slim, aderente, richiede tessuto stretch
-
-**Implicazione tecnica:** Quando cambi fit, **tutti i pannelli cambiano forma geometrica**, componenti (tasche, zip) si riposizionano proporzionalmente, e print areas si ricalcolano.
-
----
-
-## FUNZIONALITÀ DELL'APPLICAZIONE VECTORCRAFT AI
-
-Come assistente IA, hai una conoscenza approfondita delle seguenti funzionalità di VectorCraft AI. Usale per rispondere alle domande degli utenti su come utilizzare al meglio l'applicazione.
-
-### 1. Mockup Studio
-Questo è il cuore dell'app. Gli utenti possono generare mockup fotorealistici in stile vettoriale per una vasta gamma di prodotti (T-shirt, felpe, giacche, ecc.). L'utente seleziona un prodotto, stile, colore e viste per generare mockup vuoti. Può quindi caricare il proprio design, e l'IA lo applica al mockup.
-
-### 2. Sourcing Database
-Un database integrato di produttori di abbigliamento verificati da tutto il mondo. Gli utenti possono filtrare per località, Quantità Minima d'Ordine (MOQ), specializzazione di prodotto e certificazioni per trovare il partner di produzione perfetto. Fornisce un flusso di lavoro senza interruzioni dal design all'approvvigionamento.
-
-### 3. Sketch to Mockup
-Trasforma uno schizzo grezzo disegnato a mano o un wireframe digitale in un mockup pulito e rifinito. Ad esempio, un disegno di un paio di jeans può diventare uno schizzo tecnico piatto (technical flat).
-
-### 4. Brand Hub
-Un hub centrale per gestire tutte le identità di marca. Gli utenti possono visualizzare e selezionare i brand salvati o aggiungerne uno nuovo fornendo l'URL di un sito web o l'immagine di un logo. L'IA estrae quindi la palette di colori, la tipografia e il tono di voce. Gli asset del brand attivo (come colori e font) sono quindi disponibili in tutta l'app per un flusso di lavoro coerente.
-
-### 5. AI Trend Forecaster
-Uno strumento proattivo di analisi di mercato. Gli utenti possono inserire un argomento (es. 'tendenze streetwear per l'estate 2025'), e l'IA utilizza la Ricerca Google per analizzare dati in tempo reale. Genera quindi un report dettagliato su palette di colori emergenti, stili di tendenza e capi chiave.
-
-### 6. AI Brand Copywriter
-Un copywriter potenziato dall'IA che genera testi in linea con il brand. Gli utenti caricano un'immagine del prodotto, specificano il nome del prodotto e il tono di voce del brand per produrre descrizioni di prodotto, didascalie per Instagram e oggetti per email.
-
-### 7. AI Assistant (Thinking Mode)
-Questa è la funzionalità che stai eseguendo. Sei un assistente potenziato dall'IA con una profonda conoscenza di tutte le funzionalità di VectorCraft AI. Gli utenti possono porti domande complesse, richiedere strategie o cercare guida su come utilizzare al meglio l'app per raggiungere i loro obiettivi.
-
-### 8. Advanced Editor
-Un editor di immagini avanzato basato su canvas che offre un controllo a livello di layer. Gli utenti possono aggiungere immagini, testo, e forme, applicare maschere di ritaglio, regolare i colori e trasformare gli oggetti con precisione. È come una versione semplificata di Photoshop/Figma all'interno dell'app.
-
-### 9. Image & Code Generator
-Uno strumento in due fasi. Prima, genera un'immagine di alta qualità da un prompt testuale usando Imagen 4. Secondo, se l'immagine è un design UI/UX, l'utente può generare il codice HTML e CSS con Tailwind CSS corrispondente.
-`;
-};
-
-// --- Reconstructed Functions ---
-
-export type MultimodalContent = (string | File)[];
-
-export const generateWithThinking = async (contents: MultimodalContent): Promise<string> => {
-    const systemInstruction = buildSystemInstruction();
-
-    const modelParts = await Promise.all(
-        contents
-            .filter(part => (typeof part === 'string' && part.trim() !== '') || typeof part !== 'string')
-            .map(part => {
-                if (typeof part === 'string') {
-                    return { text: part };
-                } else {
-                    return fileToGenerativePart(part);
-                }
-            })
-    );
-
-    if (modelParts.length === 0) {
-        throw new Error("Cannot send an empty prompt.");
-    }
+export const generateCodeForImage = async (prompt: string, base64Data: string, mimeType: string): Promise<string> => {
+    const imagePart = {
+        inlineData: {
+            data: base64Data,
+            mimeType,
+        },
+    };
+    const userPrompt = `Based on the following user prompt and image, generate the corresponding HTML and CSS code. 
+    User prompt: "${prompt}"
+    
+    Provide only the code, enclosed in a single markdown block.
+    `;
+    const textPart = { text: userPrompt };
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
-        contents: [{ parts: modelParts }],
-        config: {
-            systemInstruction: systemInstruction,
-            thinkingConfig: { thinkingBudget: 32768 }
-        },
+        contents: { parts: [imagePart, textPart] },
     });
+    
+    // Extract code from markdown block
+    const codeBlockRegex = /```(html|css|javascript)?\n([\s\S]*?)```/g;
+    const matches = [...response.text.matchAll(codeBlockRegex)];
+    if (matches.length > 0) {
+        return matches.map(match => match[2]).join('\n\n');
+    }
+    return response.text;
+};
+
+export const generateWithThinking = async (content: MultimodalContent): Promise<string> => {
+    const parts = await Promise.all(content.map(item => {
+        if (typeof item === 'string') {
+            return { text: item };
+        }
+        return fileToGenerativePart(item);
+    }));
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: { parts },
+        config: {
+            thinkingConfig: { thinkingBudget: 8192 }, // Use thinking for complex queries
+        }
+    });
+
     return response.text;
 };
 
@@ -452,53 +296,57 @@ export const searchWithGrounding = async (prompt: string): Promise<{ text: strin
         },
     });
 
-    const text = response.text;
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    
-    return { text, sources: sources as GroundingChunk[] };
+    return { text: response.text, sources };
 };
 
-export const generateCodeForImage = async (prompt: string, base64Data: string, mimeType: string): Promise<string> => {
-    const imagePart = {
-        inlineData: {
-            data: base64Data,
-            mimeType: mimeType,
-        },
-    };
-    const textPart = { text: `Generate HTML with Tailwind CSS for this UI design. The design is for: ${prompt}. Return only the raw HTML code in a single block without any explanation or markdown.` };
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: { parts: [imagePart, textPart] },
-    });
+export const generateTrendReport = async (topic: string): Promise<string> => {
+    const prompt = `As an expert trend forecaster, analyze real-time data for the topic: "${topic}".
+    Provide a detailed report covering:
+    1.  **Key Themes & Aesthetics:** What are the dominant visual and conceptual trends?
+    2.  **Color Palettes:** Identify 3-5 key colors with hex codes.
+    3.  **Key Garments & Silhouettes:** What specific apparel items are trending?
+    4.  **Overall Summary:** A brief conclusion of the findings.
     
-    let code = response.text;
-    if (code.startsWith('```html')) {
-        code = code.substring(7);
-        if (code.endsWith('```')) {
-            code = code.slice(0, -3);
-        }
-    }
-    return code.trim();
-};
-
-export const sketchToMockup = async (sketchFile: File, prompt: string): Promise<string> => {
-    const sketchPart = await fileToGenerativePart(sketchFile);
-    const textPart = { text: `You are a professional vector artist and fashion designer. Transform the provided rough sketch into a polished, production-ready vector-style technical flat. Follow these instructions: "${prompt}". Preserve the core concept of the sketch but clean up the lines, standardize the shapes, and present it as a professional design asset on a neutral light gray background. Output a high-quality image.` };
+    Format the output in clean, readable markdown.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [sketchPart, textPart] },
+        model: 'gemini-2.5-flash',
+        contents: prompt,
         config: {
-            responseModalities: [Modality.IMAGE],
+            tools: [{ googleSearch: {} }],
+            temperature: 0.2,
         },
     });
-    
-    const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-    if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-        return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
-    }
-    throw new Error("Could not generate mockup from sketch.");
+
+    return response.text;
+};
+
+export const generateMarketingCopy = async (imageFile: File, productName: string, toneOfVoice: string): Promise<MarketingCopy> => {
+    const imagePart = await fileToGenerativePart(imageFile);
+    const prompt = `Analyze the product image. Generate marketing copy for a product named "${productName}". The brand's tone of voice is: "${toneOfVoice}". 
+    Provide the following fields in your JSON response: productDescription, instagramCaption, and emailSubject.`;
+
+    const textPart = { text: prompt };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, textPart] },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    productDescription: { type: Type.STRING },
+                    instagramCaption: { type: Type.STRING },
+                    emailSubject: { type: Type.STRING },
+                },
+                required: ['productDescription', 'instagramCaption', 'emailSubject'],
+            },
+        },
+    });
+
+    return JSON.parse(response.text);
 };
 
 const brandKitSchema = {
@@ -512,153 +360,48 @@ const brandKitSchema = {
                 accent: { type: Type.STRING, description: 'Accent brand color hex code.' },
                 neutral: { type: Type.STRING, description: 'Neutral/background brand color hex code.' },
             },
-            required: ['primary', 'secondary', 'accent', 'neutral'],
         },
         fonts: {
             type: Type.OBJECT,
             properties: {
-                heading: { type: Type.STRING, description: 'Name of the primary heading font (e.g., "Helvetica Neue").' },
-                body: { type: Type.STRING, description: 'Name of the primary body text font (e.g., "Georgia").' },
+                heading: { type: Type.STRING, description: 'Name of the primary heading font.' },
+                body: { type: Type.STRING, description: 'Name of the primary body text font.' },
             },
-            required: ['heading', 'body'],
         },
-        logoDescription: {
-            type: Type.STRING,
-            description: 'A brief, one-sentence description of the logo\'s appearance and style.',
-        },
-        toneOfVoice: {
-            type: Type.STRING,
-            description: 'A short phrase describing the brand\'s tone of voice (e.g., "Professional and trustworthy", "Playful and energetic").'
-        }
+        logoDescription: { type: Type.STRING, description: 'A brief, one-sentence description of the logo\'s style.' },
+        toneOfVoice: { type: Type.STRING, description: '3-5 keywords describing the brand\'s tone of voice (e.g., "minimal, luxurious, modern").' },
     },
-    required: ['colors', 'fonts', 'logoDescription', 'toneOfVoice'],
 };
 
 export const extractBrandKit = async (url: string): Promise<BrandKitData> => {
-     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: `Analyze the visual identity of the website at this URL: ${url}. Extract its brand kit. Use Google Search to find the website if necessary.`,
+    const prompt = `Analyze the content of the website at ${url}. Extract the brand kit information.`;
+    
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
         config: {
-            responseMimeType: 'application/json',
+            tools: [{ googleSearch: {} }],
+            responseMimeType: "application/json",
             responseSchema: brandKitSchema,
         },
     });
-    
-    const jsonStr = response.text.trim();
-    try {
-        return JSON.parse(jsonStr) as BrandKitData;
-    } catch(e) {
-        console.error("Failed to parse brand kit JSON:", jsonStr);
-        throw new Error("Could not extract a valid brand kit from the URL.");
-    }
+
+    return JSON.parse(response.text);
 };
 
 export const extractBrandKitFromImage = async (imageFile: File): Promise<BrandKitData> => {
     const imagePart = await fileToGenerativePart(imageFile);
-    const prompt = { text: 'Analyze this logo image and extract a complete brand kit from it.' };
+    const prompt = `Analyze this logo image and extract the brand kit information.`;
+    const textPart = { text: prompt };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: { parts: [imagePart, prompt] },
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, textPart] },
         config: {
             responseMimeType: "application/json",
             responseSchema: brandKitSchema,
         },
     });
-    
-    const jsonStr = response.text.trim();
-    try {
-        return JSON.parse(jsonStr) as BrandKitData;
-    } catch(e) {
-        console.error("Failed to parse brand kit JSON from image:", jsonStr);
-        throw new Error("Could not extract a valid brand kit from the image.");
-    }
-};
 
-export const generateTrendReport = async (topic: string): Promise<string> => {
-    const prompt = `You are a professional trend forecaster for the fashion industry.
-    Analyze the provided topic using real-time Google Search data to identify key trends.
-    Your report should be well-structured, insightful, and actionable for a fashion designer or brand manager.
-    Format your response using Markdown for clear headings and lists.
-    
-    Topic: "${topic}"
-    
-    Structure your report with the following sections:
-    1.  **Executive Summary:** A brief overview of the key findings.
-    2.  **Key Themes & Aesthetics:** Describe the overarching styles and visual moods.
-    3.  **Color Palette:** List 5-7 key colors with hex codes and descriptions.
-    4.  **Key Garments & Silhouettes:** Identify the must-have apparel items and their shapes (e.g., oversized, cropped).
-    5.  **Materials & Textures:** What fabrics are trending? (e.g., technical nylon, heavyweight fleece).
-    6.  **Actionable Insights:** Provide concrete ideas for a designer.
-    
-    Ground your findings in data from Google Search.`;
-    
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: prompt,
-        config: {
-            tools: [{ googleSearch: {} }],
-        },
-    });
-
-    return response.text;
-};
-
-const marketingCopySchema = {
-    type: Type.OBJECT,
-    properties: {
-        productDescription: { type: Type.STRING, description: "A compelling e-commerce product description (2-3 sentences)." },
-        instagramCaption: { type: Type.STRING, description: "An engaging Instagram caption with relevant hashtags." },
-        emailSubject: { type: Type.STRING, description: "A catchy email marketing subject line." },
-    },
-    required: ["productDescription", "instagramCaption", "emailSubject"]
-};
-
-export const generateMarketingCopy = async (imageFile: File, productName: string, toneOfVoice: string): Promise<MarketingCopy> => {
-    const imagePart = await fileToGenerativePart(imageFile);
-    const promptPart = { text: `You are an expert brand copywriter. Generate marketing copy for the product in the image.
-    - Product Name: "${productName}"
-    - Brand Tone of Voice: "${toneOfVoice}"
-    `};
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, promptPart] },
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: marketingCopySchema,
-        },
-    });
-
-    const jsonStr = response.text.trim();
-    try {
-        return JSON.parse(jsonStr) as MarketingCopy;
-    } catch(e) {
-        console.error("Failed to parse marketing copy JSON:", jsonStr);
-        throw new Error("Could not generate valid marketing copy.");
-    }
-};
-
-export const generateSvgMockup = async (prompt: string): Promise<string> => {
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: prompt,
-    });
-    
-    let svg = response.text;
-    const svgStart = svg.indexOf('<svg');
-    const svgEnd = svg.lastIndexOf('</svg>');
-
-    if (svgStart !== -1 && svgEnd !== -1) {
-        svg = svg.substring(svgStart, svgEnd + 6);
-    } else {
-       // Fallback for when the model wraps the svg in markdown
-       const markdownMatch = svg.match(/```(svg)?([\s\S]*?)```/);
-       if (markdownMatch && markdownMatch[2]) {
-           svg = markdownMatch[2].trim();
-       } else {
-           throw new Error("Generated content is not a valid SVG. Please try refining your prompt.");
-       }
-    }
-    return svg;
+    return JSON.parse(response.text);
 };

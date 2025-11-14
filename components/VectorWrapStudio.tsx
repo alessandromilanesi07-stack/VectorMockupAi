@@ -1,532 +1,329 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { applyVectorToMockup, generateSvgMockup } from '../services/geminiService';
+import React, { useState, useCallback } from 'react';
+import saveAs from 'file-saver';
+import { applyVectorToMockup, generateBlankMockup, generateVectorGraphic } from '../services/geminiService';
+import { trackEvent } from '../services/analytics';
+import { sanitizeSvgInput, optimizeSvgOutput } from '../services/vectorService';
 import { Spinner } from './Spinner';
-import { UploadIcon, ShoppingCartIcon, DownloadIcon, WandIcon, DocumentTextIcon, EditIcon, PlusIcon } from './Icons';
-import { products, productCategories } from './mockup/data';
-import type { MockupProduct } from './mockup/data';
-import { OrderModal } from './OrderModal';
-import { TechPackModal } from './TechPackModal';
-import type { View, Brand, SavedProduct, MarketingCopy } from '../types';
+import { UploadIcon, DownloadIcon, WandIcon } from './Icons';
+import type { ApplicationType } from '../types';
 
-// Helper to render SVG string safely
-const SvgRenderer: React.FC<{ svgString: string, layerVisibility: {[key: string]: boolean} }> = ({ svgString, layerVisibility }) => {
-    const styleString = Object.entries(layerVisibility)
-        .map(([layerId, isVisible]) => `[id='${layerId}'] { display: ${isVisible ? 'block' : 'none'}; }`)
-        .join(' ');
-    
-    // Inject style tag into SVG string
-    const finalSvg = svgString.replace('</svg>', `<style>${styleString}</style></svg>`);
+const MAX_MOCKUP_SIZE_MB = 5;
+const MAX_DESIGN_SIZE_MB = 2;
 
-    return <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: finalSvg }} />;
+const base64ToFile = (base64: string, filename: string): Promise<File> => {
+    return fetch(base64)
+        .then(res => res.blob())
+        .then(blob => new File([blob], filename, { type: blob.type }));
 };
 
-const base64ToFile = async (base64: string, filename: string, mimeType: string): Promise<File> => {
-    const res = await fetch(base64);
-    const blob = await res.blob();
-    return new File([blob], filename, { type: mimeType });
+const FileInput: React.FC<{
+  onFileSelect: (file: File) => void;
+  title: string;
+  file: File | null;
+  maxSizeMB: number;
+}> = ({ onFileSelect, title, file, maxSizeMB }) => {
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleFileChange = (files: FileList | null) => {
+    if (files && files[0]) {
+      const selectedFile = files[0];
+      if (selectedFile.size > maxSizeMB * 1024 * 1024) {
+        alert(`Error: File size cannot exceed ${maxSizeMB}MB.`);
+        return;
+      }
+      if (!['image/svg+xml', 'image/png', 'image/jpeg'].includes(selectedFile.type)) {
+        alert('Error: Invalid file type. Please upload SVG, PNG, or JPG.');
+        return;
+      }
+      onFileSelect(selectedFile);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFileChange(e.dataTransfer.files);
+  };
+
+  return (
+      <label
+        onDragOver={(e) => e.preventDefault()}
+        onDragEnter={() => setDragOver(true)}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        className={`w-full flex flex-col items-center justify-center p-4 bg-gray-700 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${dragOver ? 'border-blue-500 bg-gray-600' : 'border-gray-500 hover:border-gray-400'}`}
+      >
+        <UploadIcon className="h-8 w-8 text-gray-500"/>
+        <span className="mt-2 text-sm text-center text-gray-400">
+          {file ? file.name : `Drag & drop, or click`}
+        </span>
+        <span className="mt-1 text-xs text-gray-500">Max {maxSizeMB}MB</span>
+        <input
+          type="file"
+          className="hidden"
+          accept="image/svg+xml,image/png,image/jpeg"
+          onChange={(e) => handleFileChange(e.target.files)}
+        />
+      </label>
+  );
 };
 
-
-export const MockupStudio: React.FC<{
-    setCurrentView: (view: View) => void;
-    setImageForEditing: (image: string) => void;
-    activeBrand: Brand | null;
-    addProductToBrand: (brandId: string, product: SavedProduct) => void;
-    imageForMockup: string | null;
-    setImageForMockup: (image: string | null) => void;
-    copyForTechPack: MarketingCopy | null;
-}> = ({ setCurrentView, setImageForEditing, activeBrand, addProductToBrand, imageForMockup, setImageForMockup, copyForTechPack }) => {
-    const [selectedProductId, setSelectedProductId] = useState<string>('t-shirt-basic');
-    const [selectedCustomizations, setSelectedCustomizations] = useState<{ [key: string]: string }>({});
-    const [selectedViews, setSelectedViews] = useState<{[key: string]: boolean}>({
-        frontal: true,
-        retro: false,
-        lato_dx: false,
-        lato_sx: false,
-    });
-    const [color, setColor] = useState<string>('#FFFFFF');
-    const [designImage, setDesignImage] = useState<File | null>(null);
-    const [applicationType, setApplicationType] = useState<'Print' | 'Embroidery'>('Print');
-    
-    const [generatedMockups, setGeneratedMockups] = useState<{ [viewId: string]: string } | null>(null);
-    const [finalImages, setFinalImages] = useState<{ [viewId: string]: string } | null>(null);
-    const [activeViewId, setActiveViewId] = useState<string>('frontal');
-    const [stage, setStage] = useState<'config' | 'generating' | 'applying' | 'done'>('config');
-    const [error, setError] = useState<string | null>(null);
-    const [statusMessage, setStatusMessage] = useState<string | null>(null);
-    const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-    const [isTechPackModalOpen, setIsTechPackModalOpen] = useState(false);
-    
-    const [layerVisibility, setLayerVisibility] = useState<{ [key: string]: boolean }>({
-        'Background_Layer': true,
-        'Product_Base_Geometry': true,
-        'Construction_Seams': true,
-        'Construction_Details': true,
-        'Pattern_Overlay': true,
-        'Shading_Lighting': true,
-        'User_Graphics': true,
-        'Finishing_Details': true,
-    });
-
-    const layerLabels: { [key: string]: string } = {
-        'Product_Base_Geometry': 'Base',
-        'Construction_Seams': 'Cuciture',
-        'Construction_Details': 'Dettagli',
-        'Pattern_Overlay': 'Pattern',
-        'Shading_Lighting': 'Ombre',
-        'User_Graphics': 'Grafiche',
-        'Finishing_Details': 'Finiture',
-    };
-    
-    const svgContainerRef = useRef<HTMLDivElement>(null);
-
-    const selectedProduct = useMemo(() => products.find(p => p.id === selectedProductId)!, [selectedProductId]);
-    
-    useEffect(() => {
-        const defaults: { [key: string]: string } = {};
-        selectedProduct.customizations?.forEach(cust => {
-            defaults[cust.id] = cust.defaultOptionId;
-        });
-        setSelectedCustomizations(defaults);
-    }, [selectedProduct]);
-    
-    useEffect(() => {
-        if (activeBrand) {
-            setColor(activeBrand.kit.colors.primary || '#FFFFFF');
-        }
-    }, [activeBrand]);
-
-    useEffect(() => {
-        if (imageForMockup) {
-            const [header] = imageForMockup.split(',');
-            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png';
-            base64ToFile(imageForMockup, `design-${Date.now()}.png`, mimeType)
-                .then(file => {
-                    setDesignImage(file);
-                });
-            // Clear the prop so it doesn't re-trigger on re-render
-            setImageForMockup(null);
-        }
-    }, [imageForMockup, setImageForMockup]);
-
-
-    const handleSaveMockup = () => {
-        if (!finalImages?.[activeViewId]) return;
-    
-        if (activeBrand) {
-            const savedCustomizations = selectedProduct.customizations?.map(c => ({
-                name: c.name,
-                option: c.options.find(o => o.id === selectedCustomizations[c.id])?.name || 'Default'
-            })) || [];
-            
-            const product: SavedProduct = {
-                id: `prod-${Date.now()}`,
-                productName: selectedProduct.name,
-                color: color,
-                imageUrl: finalImages[activeViewId],
-                customizations: savedCustomizations
-            };
-            addProductToBrand(activeBrand.id, product);
-            alert(`"${product.productName}" saved to "${activeBrand.name}" Brand Hub!`);
-        } else {
-            if (window.confirm("To save a mockup, you need to create or select a Brand first. Would you like to go to the Brand Kit section to set one up?")) {
-                setCurrentView('brandHub');
-            }
-        }
-    };
-
-    const handleCustomizationChange = (customizationId: string, optionId: string) => {
-        setSelectedCustomizations(prev => ({ ...prev, [customizationId]: optionId }));
-    };
-
-    const handleGenerateMockup = useCallback(async () => {
-        const viewsToGenerate = Object.entries(selectedViews)
-            .filter(([, isSelected]) => isSelected)
-            .map(([viewId]) => viewId);
-
-        if (viewsToGenerate.length === 0) {
-            setError("Seleziona almeno una vista da generare.");
-            return;
-        }
-
-        setStage('generating');
-        setError(null);
-        setGeneratedMockups(null);
-        setFinalImages(null);
-        setStatusMessage('Generating technical flat...');
-        
-        try {
-            const fitOption = selectedProduct.customizations?.find(c => c.id === 'fit')?.options.find(o => o.id === selectedCustomizations['fit']);
-            const fitDescription = fitOption?.name || selectedProduct.fit;
-
-            const getConstructionDetails = (product: MockupProduct): string => {
-                const details: string[] = [];
-                const desc = product.description.toLowerCase();
-
-                if (desc.includes('kangaroo pocket') || desc.includes('tasca a marsupio')) {
-                    details.push('- Tasche: Tasca a marsupio frontale (Kangaroo pocket).');
-                }
-                if (desc.includes('zip-up') || desc.includes('zip front')) {
-                    details.push('- Chiusure: Zip frontale a tutta lunghezza.');
-                } else if (desc.includes('half-zip')) {
-                    details.push('- Chiusure: Mezza zip (Half-zip) sul colletto.');
-                } else if (desc.includes('pullover')) {
-                    details.push('- Chiusure: Nessuna (stile Pullover).');
-                }
-                if (desc.includes('button-up') || desc.includes('button placket')) {
-                    details.push('- Chiusure: Bottoni frontali.');
-                }
-                if (desc.includes('hoodie') || desc.includes('cappuccio')) {
-                    details.push('- Cappuccio: Cappuccio a doppio strato standard.');
-                }
-                if (desc.includes('crewneck') || desc.includes('girocollo')) {
-                    details.push('- Colletto: Colletto a costine a girocollo.');
-                }
-                if (desc.includes('polo')) {
-                    details.push('- Colletto: Colletto stile Polo con abbottonatura.');
-                }
-                 if (desc.includes('cargo') || desc.includes('side pockets')) {
-                    details.push('- Tasche: Tasche laterali cargo applicate.');
-                }
-
-                details.push('- Polsini e Orlo: Costine elastiche standard.');
-                details.push('- Cuciture: Cuciture standard tono su tono.');
-
-                return details.join('\n');
-            };
-
-            const constructionDetails = getConstructionDetails(selectedProduct);
-            
-            const materialMap: { [key in MockupProduct['category']]: string } = {
-                'Tops': 'Cotton Jersey 220gsm',
-                'Felpe': 'Heavyweight Cotton Fleece 480gsm',
-                'Outerwear': 'Technical Nylon Fabric',
-                'Pantaloni': 'Durable Cotton Twill',
-                'Accessori': 'Materiale appropriato per l\'articolo (es. Canvas per Tote Bag)',
-            };
-            const material = materialMap[selectedProduct.category] || 'Standard Fabric';
-
-
-            const generationPromises = viewsToGenerate.map(viewId => {
-                const viewNameMap: { [key: string]: string } = {
-                    frontal: 'Vista Frontale Piatta',
-                    retro: 'Vista Posteriore Piatta',
-                    lato_dx: 'Vista Laterale Destra Piatta',
-                    lato_sx: 'Vista Laterale Sinistra Piatta',
-                };
-                const viewName = viewNameMap[viewId] || 'Vista Frontale Piatta';
-
-                const prompt = `RUOLO E OBIETTIVO:
-Agisci come un esperto fashion designer e illustratore tecnico. Il tuo obiettivo è creare un mockup vettoriale professionale (technical flat) del capo di abbigliamento descritto di seguito. Il risultato deve essere pulito, scalabile e pronto per una scheda tecnica di produzione.
-
-DESCRIZIONE CAPO PRINCIPALE:
-- Tipo di Capo: ${selectedProduct.name}
-- Vestibilità (Fit): ${fitDescription}
-- Materiale Principale (per texture e resa): ${material}
-- Colore Base: ${color}
-
-DETTAGLI COSTRUTTIVI E COMPONENTI:
-${constructionDetails}
-
-VISTE RICHIESTE:
-Genera la seguente vista del capo:
-1. ${viewName}
-
-STILE E OUTPUT:
-- Stile Grafico: Linee nere pulite e definite. Usa ombreggiature (shading) minimali solo per dare un leggero senso di tridimensionalità e volume, concentrate sotto il colletto, le ascelle e le tasche. Il risultato DEVE essere un disegno tecnico pulito, non un mockup fotorealistico.
-- Formato Output: Genera il file in formato **SVG (Scalable Vector Graphics)**.
-- Struttura Layer (MANDATORIA): Devi strutturare l'SVG con i seguenti tag <g> usando questi esatti ID. L'ordine è dal basso verso l'alto.
-    - \`<g id="Background_Layer">\`: Un semplice rettangolo per lo sfondo, colore: #FFFFFF (bianco).
-    - \`<g id="Product_Base_Geometry">\`: I pannelli principali del tessuto del capo riempiti con il colore base specificato (${color}). Questo definisce la silhouette in base alla vestibilità.
-    - \`<g id="Construction_Seams">\`: (Opzionale ma preferito) Linee tratteggiate che rappresentano le principali cuciture di costruzione.
-    - \`<g id="Construction_Details">\`: (Se applicabile) Gruppi di forme per elementi fisici come tasche, cerniere, bottoni.
-    - \`<g id="Pattern_Overlay">\`: Un tag <g> vuoto come placeholder per i pattern.
-    - \`<g id="Shading_Lighting">\`: Forme sottili e semitrasparenti per dare un accenno di volume e profondità. Evita effetti fotorealistici.
-    - \`<g id="User_Graphics">\`: Un tag <g> vuoto come placeholder per i design applicati dall'utente.
-    - \`<g id="Finishing_Details">\`: (Opzionale) Piccoli dettagli come un'etichetta del brand all'interno del colletto.
-- Regola Finale: Rispondi **SOLO con il codice SVG grezzo**. Non includere spiegazioni, formattazione markdown (\`\`\`svg), o qualsiasi altro testo al di fuori dei tag <svg>...</svg>.
-`;
-                
-                return generateSvgMockup(prompt).then(svgResult => ({ viewId, svgResult }));
-            });
-
-            const results = await Promise.all(generationPromises);
-            
-            const newMockups = results.reduce((acc, { viewId, svgResult }) => {
-                acc[viewId] = svgResult;
-                return acc;
-            }, {} as { [key: string]: string });
-
-            setGeneratedMockups(newMockups);
-            setActiveViewId(viewsToGenerate[0]);
-            setStage('config');
-            setStatusMessage(null);
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'An unknown error occurred.');
-            setStage('config');
-            setStatusMessage(null);
-        }
-    }, [selectedProduct, selectedCustomizations, color, selectedViews]);
-
-    const handleApplyDesign = async () => {
-         if (!generatedMockups || !designImage) {
-            setError('Please generate a mockup and upload a design first.');
-            return;
-        }
-        setStage('applying');
-        setError(null);
-        setStatusMessage('Starting design application...');
-        
-        try {
-            const applicationPromises = Object.entries(generatedMockups).map(async ([viewId, svgData]: [string, string]) => {
-                const mockupFile = new File([new Blob([svgData], { type: 'image/svg+xml' })], `${viewId}-mockup.svg`);
-                const finalImageBase64 = await applyVectorToMockup(
-                    mockupFile, 
-                    designImage, 
-                    applicationType, 
-                    undefined, 
-                    (status) => setStatusMessage(`[${viewId}] ${status}`)
-                );
-                return { viewId, finalImage: finalImageBase64 };
-            });
-
-            const results = await Promise.all(applicationPromises);
-
-            const newFinalImages = results.reduce((acc, { viewId, finalImage }) => {
-                acc[viewId] = finalImage;
-                return acc;
-            }, {} as { [key: string]: string });
-
-            setFinalImages(newFinalImages);
-            setStage('done');
-            setStatusMessage(null);
-
-        } catch(e) {
-            setError(e instanceof Error ? e.message : 'An unknown error occurred while applying the design.');
-            setStage('config');
-            setStatusMessage(null);
-        }
-    };
-
-    const handleExport = async (format: 'svg' | 'png') => {
-        if (!svgContainerRef.current || !generatedMockups || !generatedMockups[activeViewId]) return;
-
-        if (format === 'svg') {
-            const svgBlob = new Blob([generatedMockups[activeViewId]], { type: 'image/svg+xml' });
-            const url = URL.createObjectURL(svgBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${selectedProduct.name.replace(' ', '_')}_${activeViewId}.svg`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } else {
-             alert("PNG export requires a canvas rendering library, which is a planned feature.");
-        }
-    };
-    
-    const isLoading = ['generating', 'applying'].includes(stage);
+const GenerationPanel: React.FC<{
+    title: string;
+    prompt: string;
+    setPrompt: (p: string) => void;
+    onGenerate: () => void;
+    isLoading: boolean;
+    generatedImage: string | null;
+    uploadedFile: File | null;
+    source: 'upload' | 'generate';
+    setSource: (s: 'upload' | 'generate') => void;
+    onFileSelect: (f: File) => void;
+    maxSizeMB: number;
+}> = ({ title, prompt, setPrompt, onGenerate, isLoading, generatedImage, uploadedFile, source, setSource, onFileSelect, maxSizeMB }) => {
+    const displayImage = uploadedFile ? URL.createObjectURL(uploadedFile) : generatedImage;
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6">
-            <h2 className="text-3xl font-extrabold text-white sm:text-4xl text-center">AI Mockup Studio (Vector)</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Config Panel */}
-                <div className="bg-gray-800 p-6 rounded-xl shadow-2xl space-y-4 self-start">
-                    <div>
-                        <h3 className="text-lg font-bold text-white mb-3">1. Seleziona Prodotto</h3>
-                        <select 
-                            value={selectedProductId} 
-                            onChange={e => setSelectedProductId(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white"
-                        >
-                            {productCategories.map(category => (
-                                <optgroup label={category} key={category}>
-                                    {products.filter(p => p.category === category).map(product => (
-                                        <option key={product.id} value={product.id}>{product.name}</option>
-                                    ))}
-                                </optgroup>
-                            ))}
-                        </select>
+        <div className="bg-gray-800 p-4 rounded-xl flex flex-col h-full">
+            <h3 className="text-lg font-bold text-white mb-3 text-center">{title}</h3>
+            <div className="flex justify-center mb-3 bg-gray-900 rounded-lg p-1">
+                <button onClick={() => setSource('generate')} className={`px-4 py-1 text-sm rounded-md ${source === 'generate' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Generate AI</button>
+                <button onClick={() => setSource('upload')} className={`px-4 py-1 text-sm rounded-md ${source === 'upload' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Upload</button>
+            </div>
+            
+            <div className="w-full aspect-square bg-gray-900 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden mb-3">
+                 {isLoading ? (
+                    <div className="text-center">
+                        <Spinner large />
+                        <p className="mt-2 text-sm text-gray-400">Generating...</p>
                     </div>
+                ) : displayImage ? (
+                    <img src={displayImage} alt="Asset" className="w-full h-full object-contain" />
+                ) : (
+                    <p className="text-gray-500 text-sm p-4 text-center">Your asset will appear here</p>
+                )}
+            </div>
+            
+            <div className="flex-grow flex flex-col">
+                {source === 'generate' ? (
+                    <>
+                        <textarea
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                            placeholder={`e.g., ${title === '1. Mockup' ? 'white t-shirt, classic fit' : 'roaring tiger logo, line art'}`}
+                            className="w-full h-24 bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white mb-2 flex-grow"
+                        />
+                        <button onClick={onGenerate} disabled={isLoading || !prompt} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
+                            {isLoading ? <Spinner /> : <><WandIcon /> Generate {title.split('. ')[1]}</>}
+                        </button>
+                    </>
+                ) : (
+                    <FileInput onFileSelect={onFileSelect} title="" file={uploadedFile} maxSizeMB={maxSizeMB} />
+                )}
+            </div>
+        </div>
+    );
+};
 
-                    {/* Customizations */}
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {selectedProduct.customizations?.map(cust => (
-                            <div key={cust.id}>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">{cust.name}</label>
-                                <select
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white"
-                                    value={selectedCustomizations[cust.id] || cust.defaultOptionId}
-                                    onChange={(e) => handleCustomizationChange(cust.id, e.target.value)}
-                                >
-                                    {cust.options.map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
-                                </select>
+
+export const MockupStudio: React.FC = () => {
+    // Input states
+    const [mockupFile, setMockupFile] = useState<File | null>(null);
+    const [designFile, setDesignFile] = useState<File | null>(null);
+    const [mockupSource, setMockupSource] = useState<'upload' | 'generate'>('generate');
+    const [designSource, setDesignSource] = useState<'upload' | 'generate'>('generate');
+    const [mockupPrompt, setMockupPrompt] = useState<string>('black hoodie, classic fit, vector illustration');
+    const [designPrompt, setDesignPrompt] = useState<string>('minimalist roaring tiger logo, line art style, on transparent background');
+    
+    // Generated asset states
+    const [generatedMockup, setGeneratedMockup] = useState<string | null>(null);
+    const [generatedDesign, setGeneratedDesign] = useState<string | null>(null);
+
+    // Final result states
+    const [applicationType, setApplicationType] = useState<ApplicationType>('Print');
+    const [resultImage, setResultImage] = useState<string | null>(null);
+    
+    // Loading and error states
+    const [isGeneratingMockup, setIsGeneratingMockup] = useState(false);
+    const [isGeneratingDesign, setIsGeneratingDesign] = useState(false);
+    const [isApplyingDesign, setIsApplyingDesign] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
+    
+    const hasMockup = mockupFile || generatedMockup;
+    const hasDesign = designFile || generatedDesign;
+    const canApply = hasMockup && hasDesign && !isApplyingDesign && !isGeneratingMockup && !isGeneratingDesign;
+
+    const handleGenerateMockup = useCallback(async () => {
+        setIsGeneratingMockup(true);
+        setError(null);
+        setMockupFile(null);
+        setGeneratedMockup(null);
+        try {
+            const result = await generateBlankMockup(mockupPrompt);
+            setGeneratedMockup(result);
+            trackEvent('ai_mockup_generated');
+        } catch(e) {
+            setError(e instanceof Error ? e.message : 'Failed to generate mockup');
+        } finally {
+            setIsGeneratingMockup(false);
+        }
+    }, [mockupPrompt]);
+
+    const handleGenerateDesign = useCallback(async () => {
+        setIsGeneratingDesign(true);
+        setError(null);
+        setDesignFile(null);
+        setGeneratedDesign(null);
+        try {
+            const result = await generateVectorGraphic(designPrompt);
+            setGeneratedDesign(result);
+            trackEvent('ai_design_generated');
+        } catch(e) {
+            setError(e instanceof Error ? e.message : 'Failed to generate design');
+        } finally {
+            setIsGeneratingDesign(false);
+        }
+    }, [designPrompt]);
+
+    const handleApplyDesign = useCallback(async () => {
+        if (!canApply) return;
+        
+        trackEvent('generation_started', { type: applicationType });
+        setIsApplyingDesign(true);
+        setError(null);
+        setResultImage(null);
+        setStatusMessage('Preparing assets...');
+
+        try {
+            const mockupForApi = mockupFile ? mockupFile : await base64ToFile(generatedMockup!, 'mockup.png');
+            let designForApi = designFile ? designFile : await base64ToFile(generatedDesign!, 'design.png');
+            
+            // Placeholder for backend processing
+            designForApi = await sanitizeSvgInput(designForApi);
+
+            const generatedImage = await applyVectorToMockup(
+                mockupForApi,
+                designForApi,
+                applicationType,
+                setStatusMessage
+            );
+            
+            // Placeholder for backend processing
+            const optimizedImage = await optimizeSvgOutput(generatedImage);
+
+            setResultImage(optimizedImage);
+            trackEvent('generation_succeeded', { type: applicationType });
+        } catch (e) {
+            const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+            setError(errorMessage);
+            trackEvent('generation_failed', { type: applicationType, error: errorMessage });
+        } finally {
+            setIsApplyingDesign(false);
+            setStatusMessage(null);
+        }
+    }, [mockupFile, designFile, generatedMockup, generatedDesign, applicationType, canApply]);
+  
+    const handleDownload = () => {
+        if (!resultImage) return;
+        trackEvent('result_downloaded');
+        saveAs(resultImage, `vectormockup_result_${Date.now()}.png`);
+    };
+
+    return (
+        <div className="w-full max-w-7xl mx-auto space-y-6 bg-gray-900/50 p-6 rounded-xl shadow-2xl border border-gray-700">
+            <div className="text-center">
+                <h2 className="text-3xl font-extrabold text-white sm:text-4xl">VectorMockupAi</h2>
+                <p className="mt-2 text-gray-400">Generate both your mockup and your design from text, or upload your own.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                {/* Mockup Panel */}
+                <GenerationPanel 
+                    title="1. Mockup"
+                    prompt={mockupPrompt}
+                    setPrompt={setMockupPrompt}
+                    onGenerate={handleGenerateMockup}
+                    isLoading={isGeneratingMockup}
+                    generatedImage={generatedMockup}
+                    uploadedFile={mockupFile}
+                    source={mockupSource}
+                    setSource={(s) => { setMockupSource(s); setGeneratedMockup(null); setMockupFile(null); }}
+                    onFileSelect={(f) => { setMockupFile(f); setGeneratedMockup(null); }}
+                    maxSizeMB={MAX_MOCKUP_SIZE_MB}
+                />
+
+                {/* Design Panel */}
+                <GenerationPanel 
+                    title="2. Design"
+                    prompt={designPrompt}
+                    setPrompt={setDesignPrompt}
+                    onGenerate={handleGenerateDesign}
+                    isLoading={isGeneratingDesign}
+                    generatedImage={generatedDesign}
+                    uploadedFile={designFile}
+                    source={designSource}
+                    setSource={(s) => { setDesignSource(s); setGeneratedDesign(null); setDesignFile(null); }}
+                    onFileSelect={(f) => { setDesignFile(f); setGeneratedDesign(null); }}
+                    maxSizeMB={MAX_DESIGN_SIZE_MB}
+                />
+
+                {/* Results Panel */}
+                <div className="bg-gray-800 p-4 rounded-xl flex flex-col h-full space-y-3">
+                    <h3 className="text-lg font-bold text-white text-center">3. Final Result</h3>
+                     <div className="w-full aspect-square bg-gray-900 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden p-2">
+                        {isApplyingDesign && (
+                            <div className="text-center">
+                                <Spinner large={true}/>
+                                <p className="mt-4 text-gray-300 text-sm animate-pulse">{statusMessage || 'Applying design...'}</p>
                             </div>
-                        ))}
+                        )}
+                        {error && <div className="text-red-400 p-4 text-center text-sm">{error}</div>}
+                        {resultImage && <img src={resultImage} alt="Generated mockup" className="w-full h-full object-contain"/>}
+                        {!isApplyingDesign && !resultImage && !error && <p className="text-gray-500 text-sm">Your result will appear here</p>}
                     </div>
                     
-                    {/* View Selection */}
                     <div>
-                        <h3 className="text-lg font-bold text-white mb-3">2. Seleziona Viste</h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {Object.entries({frontal: 'Frontale', retro: 'Retro', lato_dx: 'Lato Destro', lato_sx: 'Lato Sinistro'}).map(([viewId, viewLabel]) => (
-                                <label key={viewId} className="flex items-center p-2 bg-gray-700 rounded-md cursor-pointer has-[:checked]:bg-blue-600/50 has-[:checked]:ring-2 has-[:checked]:ring-blue-500 transition-all">
-                                    <input 
-                                        type="checkbox" 
-                                        className="form-checkbox bg-gray-800 border-gray-600 rounded text-blue-500 focus:ring-blue-600"
-                                        checked={selectedViews[viewId as keyof typeof selectedViews]} 
-                                        onChange={e => setSelectedViews(p => ({...p, [viewId]: e.target.checked}))} 
-                                    />
-                                    <span className="ml-2 text-sm">{viewLabel}</span>
+                        <h4 className="text-sm font-bold text-white mb-2">Application Type</h4>
+                        <div className="flex gap-2">
+                            {(['Print', 'Embroidery'] as ApplicationType[]).map(type => (
+                                <label key={type} className="flex-1">
+                                <input
+                                    type="radio"
+                                    name="applicationType"
+                                    value={type}
+                                    checked={applicationType === type}
+                                    onChange={() => setApplicationType(type)}
+                                    className="sr-only"
+                                />
+                                <div className={`p-3 rounded-lg text-center text-sm cursor-pointer transition-all ${applicationType === type ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                    {type}
+                                </div>
                                 </label>
                             ))}
                         </div>
                     </div>
 
-                    {/* Colors */}
-                     <div>
-                        <h3 className="text-lg font-bold text-white mb-3">3. Colore Base</h3>
-                        <div className="flex items-center gap-4">
-                           <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-12 h-12 p-1 bg-gray-700 rounded-lg" />
-                           {activeBrand && (
-                               <div className="flex gap-2">
-                                   {Object.values(activeBrand.kit.colors).map((brandColor, index) => (
-                                      <button
-                                        key={index}
-                                        onClick={() => setColor(brandColor)}
-                                        className="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-white transition-all"
-                                        style={{ backgroundColor: brandColor }}
-                                        title={`Set color to ${brandColor}`}
-                                      />
-                                   ))}
-                               </div>
-                           )}
-                        </div>
-                    </div>
-
-                     <div className="text-center border-t border-gray-700 pt-4">
-                        <button onClick={handleGenerateMockup} disabled={isLoading} className="w-full inline-flex items-center justify-center px-8 py-3 text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500">
-                            {isLoading ? <Spinner /> : 'Genera Mockup Vettoriale'}
+                    <div className="flex-grow flex flex-col justify-end">
+                        <button
+                            onClick={handleApplyDesign}
+                            disabled={!canApply}
+                            className="w-full inline-flex items-center justify-center px-6 py-4 text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {isApplyingDesign ? <Spinner /> : 'Apply Design'}
                         </button>
+                        {resultImage && !isApplyingDesign && (
+                            <button
+                                onClick={handleDownload}
+                                className="w-full mt-2 inline-flex items-center justify-center gap-2 px-6 py-3 text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                            >
+                                <DownloadIcon />
+                                Download
+                            </button>
+                        )}
                     </div>
-                    
-                    {/* Design Application */}
-                    {generatedMockups && (
-                         <div className="space-y-4 border-t border-gray-700 pt-4">
-                             <label className="block text-sm font-medium text-gray-300">4. Carica Design</label>
-                             <label className="w-full flex flex-col items-center justify-center p-4 bg-gray-700 border-2 border-dashed border-gray-500 rounded-lg cursor-pointer">
-                                 <UploadIcon />
-                                 <span className="mt-2 text-sm text-gray-400">{designImage ? designImage.name : 'Click to upload'}</span>
-                                 <input type="file" className="hidden" accept="image/*" onChange={(e) => setDesignImage(e.target.files ? e.target.files[0] : null)} />
-                             </label>
-                             <button onClick={handleApplyDesign} disabled={isLoading || !designImage} className="w-full inline-flex items-center justify-center px-8 py-3 text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-500">
-                                 {stage === 'applying' ? <Spinner /> : 'Applica Design'}
-                             </button>
-                         </div>
-                    )}
-                </div>
-
-                {/* Results Panel */}
-                <div className="bg-gray-800 p-4 rounded-xl shadow-2xl flex flex-col">
-                    <div ref={svgContainerRef} className="w-full aspect-square bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden">
-                        {isLoading ? <div className="text-center p-4"><Spinner large={true}/><p className="mt-4 text-gray-800 text-sm">{statusMessage || 'Processing...'}</p></div> : 
-                         generatedMockups && generatedMockups[activeViewId] ? <SvgRenderer svgString={generatedMockups[activeViewId]} layerVisibility={layerVisibility} /> :
-                         <p className="text-gray-400">Il tuo mockup vettoriale apparirà qui.</p>}
-                    </div>
-                    
-                    {error && <div className="mt-4 bg-red-900/50 text-red-300 p-3 rounded-lg text-center text-sm">{error}</div>}
-
-                    {generatedMockups && Object.keys(generatedMockups).length > 1 && (
-                        <div className="mt-4 grid grid-cols-4 gap-2">
-                            {Object.keys(generatedMockups).map((viewId) => (
-                                <div 
-                                    key={viewId}
-                                    onClick={() => setActiveViewId(viewId)}
-                                    className={`p-1 rounded-lg cursor-pointer transition-all ${activeViewId === viewId ? 'ring-2 ring-blue-500 bg-blue-500/20' : 'bg-gray-900 hover:bg-gray-700'}`}
-                                    title={`View ${viewId.replace('_', ' ')}`}
-                                >
-                                    <div 
-                                        className="bg-white rounded p-1"
-                                        dangerouslySetInnerHTML={{ __html: generatedMockups[viewId].replace(/<svg/g, `<svg class="w-full h-full object-contain"`) }} 
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {generatedMockups && (
-                         <div className="mt-4 pt-4 border-t border-gray-700">
-                            <h4 className="text-sm font-bold text-center text-gray-400 mb-2">Layers</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                                {Object.entries(layerLabels).map(([layerId, label]) => (
-                                    <label key={layerId} className="flex items-center p-2 bg-gray-700 rounded-md">
-                                        <input type="checkbox" className="form-checkbox bg-gray-800 border-gray-600 rounded text-blue-500 focus:ring-blue-600" checked={layerVisibility[layerId] ?? true} onChange={e => setLayerVisibility(p => ({...p, [layerId]: e.target.checked}))} />
-                                        <span className="ml-2 capitalize">{label}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {stage === 'done' && finalImages && (
-                        <div className="mt-4 pt-4 border-t border-gray-700 text-center">
-                             <h4 className="text-sm font-bold text-center text-gray-400 mb-2">Prodotto Finale</h4>
-                              <div className="w-full aspect-square bg-gray-900 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden">
-                                {finalImages[activeViewId] && <img src={finalImages[activeViewId]} alt={`Final product - ${activeViewId}`} className="w-full h-full object-contain"/>}
-                             </div>
-                              {Object.keys(finalImages).length > 1 && (
-                                <div className="mt-4 grid grid-cols-4 gap-2">
-                                    {Object.keys(finalImages).map((viewId) => (
-                                        <div 
-                                            key={viewId}
-                                            onClick={() => setActiveViewId(viewId)}
-                                            className={`p-1 rounded-lg cursor-pointer transition-all ${activeViewId === viewId ? 'ring-2 ring-blue-500' : 'bg-gray-900 hover:bg-gray-700'}`}
-                                            title={`View ${viewId.replace('_', ' ')}`}
-                                        >
-                                            <img src={finalImages[viewId]} alt={`Thumbnail ${viewId}`} className="w-full h-full object-contain rounded"/>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                 <button onClick={() => handleExport('svg')} className="flex items-center justify-center gap-2 p-2 bg-blue-600 rounded-md hover:bg-blue-700 text-sm"><DownloadIcon /> Export SVG</button>
-                                <button onClick={() => setIsTechPackModalOpen(true)} className="flex items-center justify-center gap-2 p-2 bg-green-600 rounded-md hover:bg-green-700 text-sm"><DocumentTextIcon /> Tech Pack</button>
-                                <button onClick={() => {if(finalImages?.[activeViewId]) setImageForEditing(finalImages[activeViewId]); setCurrentView('editor');}} className="flex items-center justify-center gap-2 p-2 bg-indigo-600 rounded-md hover:bg-indigo-700 text-sm"><EditIcon /> Social Post</button>
-                                <button onClick={() => setIsOrderModalOpen(true)} className="flex items-center justify-center gap-2 p-2 bg-purple-600 rounded-md hover:bg-purple-700 text-sm"><ShoppingCartIcon /> Order Print</button>
-                                <button
-                                    onClick={handleSaveMockup}
-                                    className="flex col-span-full items-center justify-center gap-2 p-2 bg-teal-600 rounded-md hover:bg-teal-700 text-sm">
-                                    <PlusIcon /> Save Mockup
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
                 </div>
             </div>
-             {isOrderModalOpen && finalImages && finalImages[activeViewId] && (
-                <OrderModal 
-                    isOpen={isOrderModalOpen}
-                    onClose={() => setIsOrderModalOpen(false)}
-                    productImage={finalImages[activeViewId]}
-                    productDetails={{ id: selectedProduct.id, name: selectedProduct.name, color: color }}
-                />
-            )}
-             {isTechPackModalOpen && (
-                <TechPackModal
-                    isOpen={isTechPackModalOpen}
-                    onClose={() => setIsTechPackModalOpen(false)}
-                    productDetails={selectedProduct}
-                    finalImages={finalImages}
-                    color={color}
-                    designFile={designImage}
-                    activeBrand={activeBrand}
-                    copyForTechPack={copyForTechPack}
-                />
-            )}
         </div>
     );
 };

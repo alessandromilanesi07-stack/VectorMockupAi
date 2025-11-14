@@ -40,7 +40,7 @@ export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 export const SourcingIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h10a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.7 9.3l.065.055a2 2 0 012.37 2.485l-.035.13a2 2 0 001.176 1.996l.14.043a2 2 0 011.996-1.176l.036-.131a2 2 0 00-2.485-2.37l-.055-.065m-5 5l-1.414-1.414" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 13v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5m14 0-2.086-2.086a2 2 0 00-2.828 0L12 13.828l-2.086-2.086a2 2 0 00-2.828 0L5 13.828m14 0l-2.086 2.086a2 2 0 01-2.828 0L12 13.828l-2.086 2.086a2 2 0 01-2.828 0L5 13.828" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 13v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5m14 0l-2.086-2.086a2 2 0 00-2.828 0L12 13.828l-2.086-2.086a2 2 0 00-2.828 0L5 13.828m14 0l-2.086 2.086a2 2 0 01-2.828 0L12 13.828l-2.086 2.086a2 2 0 01-2.828 0L5 13.828" />
     </svg>
 );
 
@@ -295,4 +295,16 @@ export const SendIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
     <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
   </svg>
+);
+
+export const ThumbsUpIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" {...props}>
+        <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333V17a1 1 0 001 1h6.364a1 1 0 00.942-.671l1.757-6.15a1 1 0 00-.942-1.329H12V4.5a1.5 1.5 0 00-3 0v5.833H6z" />
+    </svg>
+);
+
+export const ThumbsDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" {...props}>
+        <path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667V3a1 1 0 00-1-1H6.636a1 1 0 00-.942.671l-1.757 6.15a1 1 0 00.942 1.329H8V15.5a1.5 1.5 0 003 0V9.667h3z" />
+    </svg>
 );

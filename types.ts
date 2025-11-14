@@ -1,46 +1,56 @@
-export type View = 'studio' | 'editor' | 'generator' | 'sketch' | 'brandHub' | 'trends' | 'copywriter' | 'sourcing' | 'thinking';
+// This file is intentionally left sparse for the MVP.
+// As the application grows, shared types can be defined here.
 
-export interface GroundingChunk {
-  web?: {
-    uri: string;
-    title: string;
-  };
-}
+export type ApplicationType = 'Print' | 'Embroidery';
+
+// FIX: Define and export all missing shared types.
+export type View =
+  | 'studio'
+  | 'editor'
+  | 'generator'
+  | 'thinking'
+  | 'search'
+  | 'sketch'
+  | 'brandHub'
+  | 'trends'
+  | 'copywriter'
+  | 'sourcing';
+
 
 export interface BrandKitData {
     colors: {
-        primary: string;
-        secondary: string;
-        accent: string;
-        neutral: string;
+        primary?: string;
+        secondary?: string;
+        accent?: string;
+        neutral?: string;
     };
     fonts: {
-        heading: string;
-        body: string;
+        heading?: string;
+        body?: string;
     };
-    logoDescription: string;
+    logoDescription?: string;
     toneOfVoice?: string;
-}
-
-export interface SavedProductCustomization {
-    name: string;
-    option: string;
-}
-
-export interface SavedProduct {
-    id: string;
-    productName: string;
-    color: string;
-    imageUrl: string; // Can be base64 SVG or raster
-    customizations: SavedProductCustomization[];
 }
 
 export interface Brand {
     id: string;
     name: string;
     kit: BrandKitData;
-    logoImage?: string; // Base64 data URL of the logo
-    products?: SavedProduct[];
+    logoImage?: string;
+}
+
+export interface GroundingChunk {
+    web?: {
+        uri: string;
+        title: string;
+    };
+    maps?: {
+        uri: string;
+        title: string;
+        placeAnswerSources?: {
+            reviewSnippets?: any[];
+        };
+    };
 }
 
 export interface OrderDetails {
@@ -64,45 +74,41 @@ export interface MarketingCopy {
     emailSubject: string;
 }
 
-// Sourcing Module Types
-export interface BrandReference {
+export interface Manufacturer {
+  id: string;
+  name: string;
+  country: string;
+  city: string;
+  region: string;
+  yearFounded: number;
+  employees: string;
+  certifications: string[];
+  specializations: {
+    productCategories: string[];
+    productionTechniques: string[];
+    materials: string[];
+  };
+  productionData: {
+    moq: {
+      value: number;
+      category: 'Startup Friendly' | 'Small Batch' | 'Standard Production' | 'Large Scale';
+    };
+    leadTime: string;
+    monthlyCapacity: string;
+    sampleTime: string;
+  };
+  pricing: {
+    range: string;
+    examples: { item: string; cost: string }[];
+    paymentTerms: string;
+  };
+  brandReferences: {
     tier: 1 | 2 | 3;
     name: string;
-}
-
-export interface Manufacturer {
-    id: string;
-    name: string;
-    country: string;
-    city: string;
-    region: 'Asia' | 'Europe' | 'America' | 'Middle East' | 'Africa';
-    yearFounded: number;
-    employees: string;
-    certifications: string[];
-    specializations: {
-        productCategories: string[];
-        productionTechniques: string[];
-        materials: string[];
-    };
-    productionData: {
-        moq: {
-            value: number;
-            category: 'Startup Friendly' | 'Small Batch' | 'Standard Production' | 'Large Scale';
-        };
-        leadTime: string; // e.g., "45-60 days"
-        monthlyCapacity: string; // e.g., "50,000 pcs/month"
-        sampleTime: string; // e.g., "7-10 days"
-    };
-    pricing: {
-        range: '$' | '$$' | '$$$';
-        examples: { item: string, cost: string }[];
-        paymentTerms: string;
-    };
-    brandReferences: BrandReference[];
-    contact: {
-        email: string;
-        website: string;
-        whatsapp?: string;
-        b2bProfile?: string;
-    };
+  }[];
+  contact: {
+    email: string;
+    website: string;
+    whatsapp?: string;
+  };
 }
