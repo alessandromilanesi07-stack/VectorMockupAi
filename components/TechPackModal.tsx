@@ -1,7 +1,7 @@
 import React from 'react';
 import type { MockupProduct } from './mockup/data';
 import { LogoIcon } from './Icons';
-import type { Brand } from '../types';
+import type { Brand, MarketingCopy } from '../types';
 
 interface TechPackModalProps {
     isOpen: boolean;
@@ -11,9 +11,10 @@ interface TechPackModalProps {
     color: string;
     designFile: File | null;
     activeBrand: Brand | null;
+    copyForTechPack: MarketingCopy | null;
 }
 
-export const TechPackModal: React.FC<TechPackModalProps> = ({ isOpen, onClose, productDetails, finalImages, color, designFile, activeBrand }) => {
+export const TechPackModal: React.FC<TechPackModalProps> = ({ isOpen, onClose, productDetails, finalImages, color, designFile, activeBrand, copyForTechPack }) => {
     
     if (!isOpen) {
         return null;
@@ -138,7 +139,9 @@ export const TechPackModal: React.FC<TechPackModalProps> = ({ isOpen, onClose, p
                                 </div>
                                 <div>
                                     <p className="font-semibold text-gray-400">Note:</p>
-                                    <div className="h-24 mt-1 border border-gray-700 rounded-md"></div>
+                                    <div className="h-24 mt-1 border border-gray-700 rounded-md p-2 text-gray-300 overflow-y-auto text-sm">
+                                        {copyForTechPack?.productDescription || 'Nessuna nota aggiuntiva.'}
+                                    </div>
                                 </div>
                              </div>
                         </div>

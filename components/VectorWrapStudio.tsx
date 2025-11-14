@@ -6,7 +6,7 @@ import { products, productCategories } from './mockup/data';
 import type { MockupProduct } from './mockup/data';
 import { OrderModal } from './OrderModal';
 import { TechPackModal } from './TechPackModal';
-import type { View, Brand, SavedProduct } from '../types';
+import type { View, Brand, SavedProduct, MarketingCopy } from '../types';
 
 // Helper to render SVG string safely
 const SvgRenderer: React.FC<{ svgString: string, layerVisibility: {[key: string]: boolean} }> = ({ svgString, layerVisibility }) => {
@@ -20,13 +20,10 @@ const SvgRenderer: React.FC<{ svgString: string, layerVisibility: {[key: string]
     return <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: finalSvg }} />;
 };
 
-const fileToDataURL = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
+const base64ToFile = async (base64: string, filename: string, mimeType: string): Promise<File> => {
+    const res = await fetch(base64);
+    const blob = await res.blob();
+    return new File([blob], filename, { type: mimeType });
 };
 
 
@@ -35,7 +32,10 @@ export const MockupStudio: React.FC<{
     setImageForEditing: (image: string) => void;
     activeBrand: Brand | null;
     addProductToBrand: (brandId: string, product: SavedProduct) => void;
-}> = ({ setCurrentView, setImageForEditing, activeBrand, addProductToBrand }) => {
+    imageForMockup: string | null;
+    setImageForMockup: (image: string | null) => void;
+    copyForTechPack: MarketingCopy | null;
+}> = ({ setCurrentView, setImageForEditing, activeBrand, addProductToBrand, imageForMockup, setImageForMockup, copyForTechPack }) => {
     const [selectedProductId, setSelectedProductId] = useState<string>('t-shirt-basic');
     const [selectedCustomizations, setSelectedCustomizations] = useState<{ [key: string]: string }>({});
     const [selectedViews, setSelectedViews] = useState<{[key: string]: boolean}>({
@@ -53,6 +53,7 @@ export const MockupStudio: React.FC<{
     const [activeViewId, setActiveViewId] = useState<string>('frontal');
     const [stage, setStage] = useState<'config' | 'generating' | 'applying' | 'done'>('config');
     const [error, setError] = useState<string | null>(null);
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
     const [isTechPackModalOpen, setIsTechPackModalOpen] = useState(false);
     
@@ -94,6 +95,19 @@ export const MockupStudio: React.FC<{
             setColor(activeBrand.kit.colors.primary || '#FFFFFF');
         }
     }, [activeBrand]);
+
+    useEffect(() => {
+        if (imageForMockup) {
+            const [header] = imageForMockup.split(',');
+            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png';
+            base64ToFile(imageForMockup, `design-${Date.now()}.png`, mimeType)
+                .then(file => {
+                    setDesignImage(file);
+                });
+            // Clear the prop so it doesn't re-trigger on re-render
+            setImageForMockup(null);
+        }
+    }, [imageForMockup, setImageForMockup]);
 
 
     const handleSaveMockup = () => {
@@ -139,6 +153,7 @@ export const MockupStudio: React.FC<{
         setError(null);
         setGeneratedMockups(null);
         setFinalImages(null);
+        setStatusMessage('Generating technical flat...');
         
         try {
             const fitOption = selectedProduct.customizations?.find(c => c.id === 'fit')?.options.find(o => o.id === selectedCustomizations['fit']);
@@ -245,9 +260,11 @@ STILE E OUTPUT:
             setGeneratedMockups(newMockups);
             setActiveViewId(viewsToGenerate[0]);
             setStage('config');
+            setStatusMessage(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'An unknown error occurred.');
             setStage('config');
+            setStatusMessage(null);
         }
     }, [selectedProduct, selectedCustomizations, color, selectedViews]);
 
@@ -258,12 +275,18 @@ STILE E OUTPUT:
         }
         setStage('applying');
         setError(null);
+        setStatusMessage('Starting design application...');
         
         try {
-            // FIX: Explicitly type `[viewId, svgData]` to resolve a type inference issue where `svgData` was treated as `unknown`.
             const applicationPromises = Object.entries(generatedMockups).map(async ([viewId, svgData]: [string, string]) => {
                 const mockupFile = new File([new Blob([svgData], { type: 'image/svg+xml' })], `${viewId}-mockup.svg`);
-                const finalImageBase64 = await applyVectorToMockup(mockupFile, designImage, applicationType);
+                const finalImageBase64 = await applyVectorToMockup(
+                    mockupFile, 
+                    designImage, 
+                    applicationType, 
+                    undefined, 
+                    (status) => setStatusMessage(`[${viewId}] ${status}`)
+                );
                 return { viewId, finalImage: finalImageBase64 };
             });
 
@@ -276,10 +299,12 @@ STILE E OUTPUT:
 
             setFinalImages(newFinalImages);
             setStage('done');
+            setStatusMessage(null);
 
         } catch(e) {
             setError(e instanceof Error ? e.message : 'An unknown error occurred while applying the design.');
             setStage('config');
+            setStatusMessage(null);
         }
     };
 
@@ -406,11 +431,13 @@ STILE E OUTPUT:
                 {/* Results Panel */}
                 <div className="bg-gray-800 p-4 rounded-xl shadow-2xl flex flex-col">
                     <div ref={svgContainerRef} className="w-full aspect-square bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden">
-                        {isLoading ? <div className="text-center"><Spinner large={true}/><p className="mt-4 text-gray-800">Generating technical flat...</p></div> : 
+                        {isLoading ? <div className="text-center p-4"><Spinner large={true}/><p className="mt-4 text-gray-800 text-sm">{statusMessage || 'Processing...'}</p></div> : 
                          generatedMockups && generatedMockups[activeViewId] ? <SvgRenderer svgString={generatedMockups[activeViewId]} layerVisibility={layerVisibility} /> :
                          <p className="text-gray-400">Il tuo mockup vettoriale apparirà qui.</p>}
                     </div>
                     
+                    {error && <div className="mt-4 bg-red-900/50 text-red-300 p-3 rounded-lg text-center text-sm">{error}</div>}
+
                     {generatedMockups && Object.keys(generatedMockups).length > 1 && (
                         <div className="mt-4 grid grid-cols-4 gap-2">
                             {Object.keys(generatedMockups).map((viewId) => (
@@ -497,6 +524,7 @@ STILE E OUTPUT:
                     color={color}
                     designFile={designImage}
                     activeBrand={activeBrand}
+                    copyForTechPack={copyForTechPack}
                 />
             )}
         </div>

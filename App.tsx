@@ -9,13 +9,17 @@ import { TrendForecaster } from './components/TrendForecaster';
 import { Copywriter } from './components/Copywriter';
 import { Sourcing } from './components/Sourcing';
 import { ThinkingMode } from './components/ThinkingMode';
-import type { View, Brand, SavedProduct } from './types';
+import type { View, Brand, SavedProduct, MarketingCopy } from './types';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('studio');
   const [imageForEditing, setImageForEditing] = useState<string | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [activeBrandId, setActiveBrandId] = useState<string | null>(null);
+
+  // New state for data transfer between components
+  const [imageForMockup, setImageForMockup] = useState<string | null>(null);
+  const [copyForTechPack, setCopyForTechPack] = useState<MarketingCopy | null>(null);
 
   const activeBrand = brands.find(b => b.id === activeBrandId) || null;
 
@@ -39,6 +43,9 @@ const App: React.FC = () => {
           setImageForEditing={setImageForEditing} 
           activeBrand={activeBrand}
           addProductToBrand={addProductToBrand}
+          imageForMockup={imageForMockup}
+          setImageForMockup={setImageForMockup} // Pass setter to clear it after use
+          copyForTechPack={copyForTechPack}
         />;
       case 'sketch':
         return <SketchToMockup />;
@@ -56,11 +63,17 @@ const App: React.FC = () => {
           activeBrand={activeBrand}
         />;
       case 'generator':
-        return <ImageGenerator />;
+        return <ImageGenerator 
+          setCurrentView={setCurrentView}
+          setImageForMockup={setImageForMockup}
+        />;
       case 'trends':
         return <TrendForecaster />;
       case 'copywriter':
-        return <Copywriter activeBrand={activeBrand} />;
+        return <Copywriter 
+          activeBrand={activeBrand} 
+          setCopyForTechPack={setCopyForTechPack}
+        />;
       case 'sourcing':
         return <Sourcing />;
       case 'thinking':
@@ -71,6 +84,9 @@ const App: React.FC = () => {
           setImageForEditing={setImageForEditing} 
           activeBrand={activeBrand}
           addProductToBrand={addProductToBrand}
+          imageForMockup={imageForMockup}
+          setImageForMockup={setImageForMockup}
+          copyForTechPack={copyForTechPack}
         />;
     }
   };

@@ -27,57 +27,109 @@ const fileToGenerativePart = (file: File) => {
   });
 };
 
+export const validateMockupOutput = async (generatedImageBase64: string): Promise<boolean> => {
+    const data = generatedImageBase64.split(',')[1];
+    const mimeType = generatedImageBase64.match(/:(.*?);/)?.[1] || 'image/png';
+    
+    const imagePart = {
+        inlineData: { data, mimeType },
+    };
+
+    const prompt = `Analyze this mockup image. Respond ONLY with 'TRUE' if the image adheres to ALL the following rules, otherwise respond 'FALSE'.
+    1. The garment itself does not have photorealistic lighting, shadows, or textures. It must look like a clean vector illustration.
+    2. Any applied graphic is flat or has only the specified texture (like embroidery), fitting the vector style.
+    3. The overall shape, color, and background of the original blank mockup are perfectly preserved.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            temperature: 0, // for deterministic TRUE/FALSE
+        }
+    });
+
+    const resultText = response.text.trim().toUpperCase();
+    console.log('Validation result:', resultText);
+    return resultText === 'TRUE';
+};
+
+
 export const applyVectorToMockup = async (
     mockupImage: File, 
     designImage: File | null, 
     applicationType: 'Print' | 'Embroidery' = 'Print',
-    customInstruction?: string
+    customInstruction?: string,
+    onStatusUpdate?: (status: string) => void
 ): Promise<string> => {
-    const mockupPart = await fileToGenerativePart(mockupImage);
-    const parts: (typeof mockupPart | { text: string })[] = [mockupPart];
+    const MAX_RETRIES = 3;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        onStatusUpdate?.(`Applying design (Attempt ${attempt}/${MAX_RETRIES})...`);
     
-    if (designImage) {
-        const designPart = await fileToGenerativePart(designImage);
-        parts.push(designPart);
+        const mockupPart = await fileToGenerativePart(mockupImage);
+        const parts: (typeof mockupPart | { text: string })[] = [mockupPart];
+        
+        if (designImage) {
+            const designPart = await fileToGenerativePart(designImage);
+            parts.push(designPart);
+        }
+
+        let applicationInstruction = "Apply the design flat onto the print area as a high-quality DTG (Direct-to-Garment) print.";
+        if (applicationType === 'Embroidery') {
+            applicationInstruction = "Apply the design to the mockup, simulating a realistic, high-quality embroidery texture with visible stitching and slight elevation.";
+        }
+        
+        if (customInstruction) {
+            applicationInstruction = customInstruction;
+        }
+
+        let prompt = `You are an expert at applying graphics to apparel mockups. You will receive a blank mockup image (which might be a raster or an SVG) and a user's design graphic.
+        Your task is to apply the user's design onto the designated print area of the mockup, following a specific creative instruction.
+
+        **Creative Instruction:** "${applicationInstruction}"
+
+        **Key Rules:**
+        1.  **Placement:** Position the design on the main print area (e.g., center chest) unless the instruction specifies a different location.
+        2.  **Style Consistency:** The final image must maintain the exact same clean, flat, vector-illustration style of the input mockup. DO NOT add photorealistic lighting, shadows, or textures to the garment itself. The only texture should be on the applied design as specified by the creative application.
+        3.  **Preservation:** Perfectly preserve the original mockup's color, shape, and background. Only add the user's design.
+        4.  **Final Output:** The result must be a high-quality image that looks like a professional, production-ready vector mockup with the design applied. Avoid any photographic elements.`;
+
+        if (attempt > 1) {
+            prompt += "\n\n**ATTENTION:** The previous attempt failed quality validation. Be extremely strict in adhering to the Key Rules. Maintain the vector style and do not alter the mockup base.";
+        }
+
+        parts.push({text: prompt});
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts },
+            config: {
+                responseModalities: [Modality.IMAGE],
+            },
+        });
+
+        const firstPart = response.candidates?.[0]?.content?.parts?.[0];
+        if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
+            const generatedImageBase64 = `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
+            
+            onStatusUpdate?.(`Validating result (Attempt ${attempt}/${MAX_RETRIES})...`);
+            const isValid = await validateMockupOutput(generatedImageBase64);
+
+            if (isValid) {
+                onStatusUpdate?.('Validation successful!');
+                return generatedImageBase64;
+            } else if (attempt < MAX_RETRIES) {
+                 onStatusUpdate?.(`Validation failed (Attempt ${attempt}/${MAX_RETRIES}). Retrying...`);
+            }
+        } else {
+             if (attempt < MAX_RETRIES) {
+                onStatusUpdate?.(`Image generation failed (Attempt ${attempt}/${MAX_RETRIES}). Retrying...`);
+             }
+        }
     }
 
-    let applicationInstruction = "Apply the design flat onto the print area as a high-quality DTG (Direct-to-Garment) print.";
-    if (applicationType === 'Embroidery') {
-        applicationInstruction = "Apply the design to the mockup, simulating a realistic, high-quality embroidery texture with visible stitching and slight elevation.";
-    }
-    
-    // Custom instruction overrides default behavior
-    if (customInstruction) {
-        applicationInstruction = customInstruction;
-    }
-
-    const prompt = `You are an expert at applying graphics to apparel mockups. You will receive a blank mockup image (which might be a raster or an SVG) and a user's design graphic.
-    Your task is to apply the user's design onto the designated print area of the mockup, following a specific creative instruction.
-
-    **Creative Instruction:** "${applicationInstruction}"
-
-    **Key Rules:**
-    1.  **Placement:** Position the design on the main print area (e.g., center chest) unless the instruction specifies a different location.
-    2.  **Style Consistency:** The final image must maintain the exact same clean, flat, vector-illustration style of the input mockup. DO NOT add photorealistic lighting, shadows, or textures to the garment itself. The only texture should be on the applied design as specified by the creative application.
-    3.  **Preservation:** Perfectly preserve the original mockup's color, shape, and background. Only add the user's design.
-    4.  **Final Output:** The result must be a high-quality image that looks like a professional, production-ready vector mockup with the design applied. Avoid any photographic elements.`;
-
-    parts.push({text: prompt});
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts },
-        config: {
-            responseModalities: [Modality.IMAGE],
-        },
-    });
-
-    const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-    if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-        return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
-    }
-
-    throw new Error("No image was generated. Please try again.");
+    throw new Error("Failed to generate a valid mockup after multiple attempts. Please try a different design or adjust custom instructions.");
 };
 
 export const editImage = async (image: File, prompt: string): Promise<string> => {

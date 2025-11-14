@@ -1,8 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { generateImage, generateCodeForImage } from '../services/geminiService';
 import { Spinner } from './Spinner';
+import type { View } from '../types';
 
-export const ImageGenerator: React.FC = () => {
+interface ImageGeneratorProps {
+    setImageForMockup: (image: string) => void;
+    setCurrentView: (view: View) => void;
+}
+
+export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ setImageForMockup, setCurrentView }) => {
     const [prompt, setPrompt] = useState<string>('');
     const [aspectRatio, setAspectRatio] = useState<string>('1:1');
     const [generatedImages, setGeneratedImages] = useState<string[]>([]);
@@ -55,6 +61,13 @@ export const ImageGenerator: React.FC = () => {
             setError(e instanceof Error ? e.message : 'Failed to generate code.');
         } finally {
             setLoadingCode(false);
+        }
+    };
+
+    const handleUseForMockup = () => {
+        if (generatedImages.length > 0) {
+            setImageForMockup(generatedImages[0]);
+            setCurrentView('studio');
         }
     };
 
@@ -114,13 +127,19 @@ export const ImageGenerator: React.FC = () => {
                 <div className="bg-gray-800 p-4 rounded-xl shadow-2xl space-y-4">
                     <h3 className="text-xl font-bold text-center">Generated Image</h3>
                     <img src={generatedImages[0]} alt="Generated art" className="w-full max-w-2xl mx-auto h-auto object-contain rounded-lg" />
-                    <div className="text-center">
+                    <div className="text-center flex gap-4 justify-center">
                          <button
                             onClick={handleGenerateCode}
                             disabled={loadingCode}
                             className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
                         >
                             {loadingCode ? <Spinner /> : 'Generate Code'}
+                        </button>
+                         <button
+                            onClick={handleUseForMockup}
+                            className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
+                        >
+                            Use for Mockup
                         </button>
                     </div>
                 </div>

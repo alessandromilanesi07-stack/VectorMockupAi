@@ -72,16 +72,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, b
           <LogoIcon className="h-8 w-8 text-blue-500" />
           <h1 className="text-xl font-bold ml-2 text-white">VectorCraft AI</h1>
         </div>
-        <nav className="space-y-2">
-          <NavItem view="studio" label="Mockup Studio" icon={<StudioIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="sourcing" label="Sourcing Database" icon={<SourcingIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="sketch" label="Sketch to Mockup" icon={<SketchIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="brandHub" label="Brand Hub" icon={<BrandIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="trends" label="Trend Forecaster" icon={<TrendIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="copywriter" label="AI Copywriter" icon={<CopywriterIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="thinking" label="AI Assistant" icon={<ThinkIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="editor" label="Advanced Editor" icon={<EditIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="generator" label="Image Generator" icon={<GenerateIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+        <nav className="space-y-4">
+          <div>
+              <h3 className="px-2 mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">1. Concept & Inspiration</h3>
+              <div className="space-y-1">
+                  <NavItem view="trends" label="Trend Forecaster" icon={<TrendIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+                  <NavItem view="brandHub" label="Brand Hub" icon={<BrandIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+              </div>
+          </div>
+          <div>
+              <h3 className="px-2 mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">2. Design Creation</h3>
+              <div className="space-y-1">
+                  <NavItem view="generator" label="Image Generator" icon={<GenerateIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+                  <NavItem view="sketch" label="Sketch to Mockup" icon={<SketchIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+              </div>
+          </div>
+          <div>
+              <h3 className="px-2 mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">3. Mockup & Presentation</h3>
+              <div className="space-y-1">
+                  <NavItem view="studio" label="Mockup Studio" icon={<StudioIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+                  <NavItem view="copywriter" label="AI Copywriter" icon={<CopywriterIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+                  <NavItem view="editor" label="Advanced Editor" icon={<EditIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+                  <NavItem view="sourcing" label="Sourcing Database" icon={<SourcingIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+              </div>
+          </div>
+           <div>
+              <h3 className="px-2 mb-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">AI Tools</h3>
+              <div className="space-y-1">
+                  <NavItem view="thinking" label="AI Assistant" icon={<ThinkIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+              </div>
+          </div>
         </nav>
          <BrandHubSelector 
             brands={brands} 

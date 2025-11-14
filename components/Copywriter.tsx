@@ -6,9 +6,10 @@ import type { MarketingCopy, Brand } from '../types';
 
 interface CopywriterProps {
     activeBrand: Brand | null;
+    setCopyForTechPack: (copy: MarketingCopy) => void;
 }
 
-export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand }) => {
+export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand, setCopyForTechPack }) => {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [productName, setProductName] = useState<string>('');
@@ -51,6 +52,13 @@ export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand }) => {
             setLoading(false);
         }
     }, [imageFile, productName, toneOfVoice]);
+
+    const handleUseForTechPack = () => {
+        if (copy) {
+            setCopyForTechPack(copy);
+            alert('Copy saved for your next Tech Pack!');
+        }
+    };
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
@@ -137,6 +145,14 @@ export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand }) => {
                              <div>
                                 <h4 className="font-semibold text-gray-300 border-b border-gray-700 pb-2 mb-2">Email Subject Line</h4>
                                 <p className="text-gray-200">{copy.emailSubject}</p>
+                            </div>
+                             <div className="border-t border-gray-700 pt-4 text-center">
+                                <button
+                                    onClick={handleUseForTechPack}
+                                    className="inline-flex items-center justify-center px-6 py-2 text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700"
+                                >
+                                    Usa Testo per Scheda Tecnica
+                                </button>
                             </div>
                          </div>
                      )}
