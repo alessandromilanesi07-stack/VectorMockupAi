@@ -3,7 +3,6 @@ import { applyVectorToMockup, generateSvgMockup } from '../services/geminiServic
 import { Spinner } from './Spinner';
 import { UploadIcon, ShoppingCartIcon, DownloadIcon, WandIcon, DocumentTextIcon, EditIcon, PlusIcon } from './Icons';
 import { products, productCategories } from './mockup/data';
-import * as ProductIcons from './mockup/icons';
 import type { MockupProduct } from './mockup/data';
 import { OrderModal } from './OrderModal';
 import { TechPackModal } from './TechPackModal';
@@ -60,16 +59,22 @@ export const MockupStudio: React.FC<{
     const [layerVisibility, setLayerVisibility] = useState<{ [key: string]: boolean }>({
         'Background_Layer': true,
         'Product_Base_Geometry': true,
+        'Construction_Seams': true,
+        'Construction_Details': true,
         'Pattern_Overlay': true,
         'Shading_Lighting': true,
         'User_Graphics': true,
+        'Finishing_Details': true,
     });
 
     const layerLabels: { [key: string]: string } = {
         'Product_Base_Geometry': 'Base',
+        'Construction_Seams': 'Cuciture',
+        'Construction_Details': 'Dettagli',
+        'Pattern_Overlay': 'Pattern',
         'Shading_Lighting': 'Ombre',
-        'Pattern_Overlay': 'Patterns',
         'User_Graphics': 'Grafiche',
+        'Finishing_Details': 'Finiture',
     };
     
     const svgContainerRef = useRef<HTMLDivElement>(null);
@@ -83,6 +88,38 @@ export const MockupStudio: React.FC<{
         });
         setSelectedCustomizations(defaults);
     }, [selectedProduct]);
+    
+    useEffect(() => {
+        if (activeBrand) {
+            setColor(activeBrand.kit.colors.primary || '#FFFFFF');
+        }
+    }, [activeBrand]);
+
+
+    const handleSaveMockup = () => {
+        if (!finalImages?.[activeViewId]) return;
+    
+        if (activeBrand) {
+            const savedCustomizations = selectedProduct.customizations?.map(c => ({
+                name: c.name,
+                option: c.options.find(o => o.id === selectedCustomizations[c.id])?.name || 'Default'
+            })) || [];
+            
+            const product: SavedProduct = {
+                id: `prod-${Date.now()}`,
+                productName: selectedProduct.name,
+                color: color,
+                imageUrl: finalImages[activeViewId],
+                customizations: savedCustomizations
+            };
+            addProductToBrand(activeBrand.id, product);
+            alert(`"${product.productName}" saved to "${activeBrand.name}" Brand Hub!`);
+        } else {
+            if (window.confirm("To save a mockup, you need to create or select a Brand first. Would you like to go to the Brand Kit section to set one up?")) {
+                setCurrentView('brandHub');
+            }
+        }
+    };
 
     const handleCustomizationChange = (customizationId: string, optionId: string) => {
         setSelectedCustomizations(prev => ({ ...prev, [customizationId]: optionId }));
@@ -105,37 +142,94 @@ export const MockupStudio: React.FC<{
         
         try {
             const fitOption = selectedProduct.customizations?.find(c => c.id === 'fit')?.options.find(o => o.id === selectedCustomizations['fit']);
-            const fitDescription = fitOption?.description || selectedProduct.fit;
+            const fitDescription = fitOption?.name || selectedProduct.fit;
+
+            const getConstructionDetails = (product: MockupProduct): string => {
+                const details: string[] = [];
+                const desc = product.description.toLowerCase();
+
+                if (desc.includes('kangaroo pocket') || desc.includes('tasca a marsupio')) {
+                    details.push('- Tasche: Tasca a marsupio frontale (Kangaroo pocket).');
+                }
+                if (desc.includes('zip-up') || desc.includes('zip front')) {
+                    details.push('- Chiusure: Zip frontale a tutta lunghezza.');
+                } else if (desc.includes('half-zip')) {
+                    details.push('- Chiusure: Mezza zip (Half-zip) sul colletto.');
+                } else if (desc.includes('pullover')) {
+                    details.push('- Chiusure: Nessuna (stile Pullover).');
+                }
+                if (desc.includes('button-up') || desc.includes('button placket')) {
+                    details.push('- Chiusure: Bottoni frontali.');
+                }
+                if (desc.includes('hoodie') || desc.includes('cappuccio')) {
+                    details.push('- Cappuccio: Cappuccio a doppio strato standard.');
+                }
+                if (desc.includes('crewneck') || desc.includes('girocollo')) {
+                    details.push('- Colletto: Colletto a costine a girocollo.');
+                }
+                if (desc.includes('polo')) {
+                    details.push('- Colletto: Colletto stile Polo con abbottonatura.');
+                }
+                 if (desc.includes('cargo') || desc.includes('side pockets')) {
+                    details.push('- Tasche: Tasche laterali cargo applicate.');
+                }
+
+                details.push('- Polsini e Orlo: Costine elastiche standard.');
+                details.push('- Cuciture: Cuciture standard tono su tono.');
+
+                return details.join('\n');
+            };
+
+            const constructionDetails = getConstructionDetails(selectedProduct);
+            
+            const materialMap: { [key in MockupProduct['category']]: string } = {
+                'Tops': 'Cotton Jersey 220gsm',
+                'Felpe': 'Heavyweight Cotton Fleece 480gsm',
+                'Outerwear': 'Technical Nylon Fabric',
+                'Pantaloni': 'Durable Cotton Twill',
+                'Accessori': 'Materiale appropriato per l\'articolo (es. Canvas per Tote Bag)',
+            };
+            const material = materialMap[selectedProduct.category] || 'Standard Fabric';
+
 
             const generationPromises = viewsToGenerate.map(viewId => {
                 const viewNameMap: { [key: string]: string } = {
-                    frontal: 'Frontal view',
-                    retro: 'Back view',
-                    lato_dx: 'Right side view',
-                    lato_sx: 'Left side view',
+                    frontal: 'Vista Frontale Piatta',
+                    retro: 'Vista Posteriore Piatta',
+                    lato_dx: 'Vista Laterale Destra Piatta',
+                    lato_sx: 'Vista Laterale Sinistra Piatta',
                 };
-                const viewName = viewNameMap[viewId] || 'Frontal view';
+                const viewName = viewNameMap[viewId] || 'Vista Frontale Piatta';
 
-                const prompt = `Act as a Virtual Graphic Production Director for Fashion Design. Your task is to generate a professional, realistic vector mockup SVG of a ${selectedProduct.name}.
+                const prompt = `RUOLO E OBIETTIVO:
+Agisci come un esperto fashion designer e illustratore tecnico. Il tuo obiettivo è creare un mockup vettoriale professionale (technical flat) del capo di abbigliamento descritto di seguito. Il risultato deve essere pulito, scalabile e pronto per una scheda tecnica di produzione.
 
-**PRODUCT SPECIFICATIONS:**
-- **Product:** ${selectedProduct.name}
-- **Fit:** ${fitDescription}. This is critical for the geometry and proportions.
-- **Base Color:** ${color}.
-- **View:** ${viewName}.
+DESCRIZIONE CAPO PRINCIPALE:
+- Tipo di Capo: ${selectedProduct.name}
+- Vestibilità (Fit): ${fitDescription}
+- Materiale Principale (per texture e resa): ${material}
+- Colore Base: ${color}
 
-**SVG STRUCTURE & STYLE REQUIREMENTS (MANDATORY):**
+DETTAGLI COSTRUTTIVI E COMPONENTI:
+${constructionDetails}
 
-1.  **REALISM > FLAT:** The output MUST be a realistic mockup with natural fabric folds, soft shadows, and subtle lighting to give it a 3D appearance. **DO NOT create a flat technical sketch.** It should look like a real garment photographed cleanly in a studio setting.
+VISTE RICHIESTE:
+Genera la seguente vista del capo:
+1. ${viewName}
 
-2.  **SIMPLIFIED LAYERED SVG HIERARCHY:** You MUST structure the SVG with the following <g> tags, using these **exact IDs**. The order is from bottom to top. Focus on the overall shape and realism, omitting fine construction details like seams or labels.
-    - \`<g id="Background_Layer">\`: A simple rectangle for the background, color: #f3f4f6 (light gray).
-    - \`<g id="Product_Base_Geometry">\`: The main fabric panels of the garment filled with the specified base color (${color}). This defines the shape based on the fit.
-    - \`<g id="Pattern_Overlay">\`: An empty group tag as a placeholder.
-    - \`<g id="Shading_Lighting">\`: **THIS IS THE MOST IMPORTANT LAYER FOR REALISM.** Add soft gradients (radial and linear), highlights, and shadows to simulate fabric folds and create depth. Use subtle black/white gradients with low opacity (e.g., 0.1-0.3).
-    - \`<g id="User_Graphics">\`: An empty group tag as a placeholder for user-applied designs.
-
-3.  **OUTPUT FORMAT:** Respond with **ONLY the raw SVG code**. Do not include any explanations, markdown formatting (\`\`\`svg), or any other text outside the <svg>...</svg> tags.
+STILE E OUTPUT:
+- Stile Grafico: Linee nere pulite e definite. Usa ombreggiature (shading) minimali solo per dare un leggero senso di tridimensionalità e volume, concentrate sotto il colletto, le ascelle e le tasche. Il risultato DEVE essere un disegno tecnico pulito, non un mockup fotorealistico.
+- Formato Output: Genera il file in formato **SVG (Scalable Vector Graphics)**.
+- Struttura Layer (MANDATORIA): Devi strutturare l'SVG con i seguenti tag <g> usando questi esatti ID. L'ordine è dal basso verso l'alto.
+    - \`<g id="Background_Layer">\`: Un semplice rettangolo per lo sfondo, colore: #FFFFFF (bianco).
+    - \`<g id="Product_Base_Geometry">\`: I pannelli principali del tessuto del capo riempiti con il colore base specificato (${color}). Questo definisce la silhouette in base alla vestibilità.
+    - \`<g id="Construction_Seams">\`: (Opzionale ma preferito) Linee tratteggiate che rappresentano le principali cuciture di costruzione.
+    - \`<g id="Construction_Details">\`: (Se applicabile) Gruppi di forme per elementi fisici come tasche, cerniere, bottoni.
+    - \`<g id="Pattern_Overlay">\`: Un tag <g> vuoto come placeholder per i pattern.
+    - \`<g id="Shading_Lighting">\`: Forme sottili e semitrasparenti per dare un accenno di volume e profondità. Evita effetti fotorealistici.
+    - \`<g id="User_Graphics">\`: Un tag <g> vuoto come placeholder per i design applicati dall'utente.
+    - \`<g id="Finishing_Details">\`: (Opzionale) Piccoli dettagli come un'etichetta del brand all'interno del colletto.
+- Regola Finale: Rispondi **SOLO con il codice SVG grezzo**. Non includere spiegazioni, formattazione markdown (\`\`\`svg), o qualsiasi altro testo al di fuori dei tag <svg>...</svg>.
 `;
                 
                 return generateSvgMockup(prompt).then(svgResult => ({ viewId, svgResult }));
@@ -269,10 +363,21 @@ export const MockupStudio: React.FC<{
                     {/* Colors */}
                      <div>
                         <h3 className="text-lg font-bold text-white mb-3">3. Colore Base</h3>
-                        <div className="flex gap-4">
-                            <div>
-                                <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-12 h-12 p-1 bg-gray-700 rounded-lg" />
-                            </div>
+                        <div className="flex items-center gap-4">
+                           <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-12 h-12 p-1 bg-gray-700 rounded-lg" />
+                           {activeBrand && (
+                               <div className="flex gap-2">
+                                   {Object.values(activeBrand.kit.colors).map((brandColor, index) => (
+                                      <button
+                                        key={index}
+                                        onClick={() => setColor(brandColor)}
+                                        className="w-8 h-8 rounded-full border-2 border-gray-600 hover:border-white transition-all"
+                                        style={{ backgroundColor: brandColor }}
+                                        title={`Set color to ${brandColor}`}
+                                      />
+                                   ))}
+                               </div>
+                           )}
                         </div>
                     </div>
 
@@ -300,8 +405,8 @@ export const MockupStudio: React.FC<{
 
                 {/* Results Panel */}
                 <div className="bg-gray-800 p-4 rounded-xl shadow-2xl flex flex-col">
-                    <div ref={svgContainerRef} className="w-full aspect-square bg-gray-900 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden">
-                        {isLoading ? <div className="text-center"><Spinner large={true}/><p className="mt-4">Generating realistic mockup...</p></div> : 
+                    <div ref={svgContainerRef} className="w-full aspect-square bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden">
+                        {isLoading ? <div className="text-center"><Spinner large={true}/><p className="mt-4 text-gray-800">Generating technical flat...</p></div> : 
                          generatedMockups && generatedMockups[activeViewId] ? <SvgRenderer svgString={generatedMockups[activeViewId]} layerVisibility={layerVisibility} /> :
                          <p className="text-gray-400">Il tuo mockup vettoriale apparirà qui.</p>}
                     </div>
@@ -330,7 +435,7 @@ export const MockupStudio: React.FC<{
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                                 {Object.entries(layerLabels).map(([layerId, label]) => (
                                     <label key={layerId} className="flex items-center p-2 bg-gray-700 rounded-md">
-                                        <input type="checkbox" className="form-checkbox bg-gray-800 border-gray-600 rounded text-blue-500 focus:ring-blue-600" checked={layerVisibility[layerId]} onChange={e => setLayerVisibility(p => ({...p, [layerId]: e.target.checked}))} />
+                                        <input type="checkbox" className="form-checkbox bg-gray-800 border-gray-600 rounded text-blue-500 focus:ring-blue-600" checked={layerVisibility[layerId] ?? true} onChange={e => setLayerVisibility(p => ({...p, [layerId]: e.target.checked}))} />
                                         <span className="ml-2 capitalize">{label}</span>
                                     </label>
                                 ))}
@@ -364,26 +469,11 @@ export const MockupStudio: React.FC<{
                                 <button onClick={() => setIsTechPackModalOpen(true)} className="flex items-center justify-center gap-2 p-2 bg-green-600 rounded-md hover:bg-green-700 text-sm"><DocumentTextIcon /> Tech Pack</button>
                                 <button onClick={() => {if(finalImages?.[activeViewId]) setImageForEditing(finalImages[activeViewId]); setCurrentView('editor');}} className="flex items-center justify-center gap-2 p-2 bg-indigo-600 rounded-md hover:bg-indigo-700 text-sm"><EditIcon /> Social Post</button>
                                 <button onClick={() => setIsOrderModalOpen(true)} className="flex items-center justify-center gap-2 p-2 bg-purple-600 rounded-md hover:bg-purple-700 text-sm"><ShoppingCartIcon /> Order Print</button>
-                                 {activeBrand && (
-                                    <button onClick={async () => {
-                                        if (finalImages?.[activeViewId]) {
-                                            const savedCustomizations = selectedProduct.customizations?.map(c => ({
-                                                name: c.name,
-                                                option: c.options.find(o => o.id === selectedCustomizations[c.id])?.name || 'Default'
-                                            })) || [];
-                                            
-                                            const product: SavedProduct = {
-                                                id: `prod-${Date.now()}`,
-                                                productName: selectedProduct.name,
-                                                color: color,
-                                                imageUrl: finalImages[activeViewId],
-                                                customizations: savedCustomizations
-                                            };
-                                            addProductToBrand(activeBrand.id, product);
-                                            alert(`"${product.productName}" salvato nel Brand Hub di "${activeBrand.name}"!`);
-                                        }
-                                    }} className="flex col-span-full items-center justify-center gap-2 p-2 bg-teal-600 rounded-md hover:bg-teal-700 text-sm"><PlusIcon /> Salva nel Brand Hub</button>
-                                )}
+                                <button
+                                    onClick={handleSaveMockup}
+                                    className="flex col-span-full items-center justify-center gap-2 p-2 bg-teal-600 rounded-md hover:bg-teal-700 text-sm">
+                                    <PlusIcon /> Save Mockup
+                                </button>
                             </div>
                         </div>
                     )}
@@ -406,6 +496,7 @@ export const MockupStudio: React.FC<{
                     finalImages={finalImages}
                     color={color}
                     designFile={designImage}
+                    activeBrand={activeBrand}
                 />
             )}
         </div>

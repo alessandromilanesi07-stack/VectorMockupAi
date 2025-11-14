@@ -1,6 +1,7 @@
 import React from 'react';
 import type { MockupProduct } from './mockup/data';
 import { LogoIcon } from './Icons';
+import type { Brand } from '../types';
 
 interface TechPackModalProps {
     isOpen: boolean;
@@ -9,9 +10,10 @@ interface TechPackModalProps {
     finalImages: { [viewId: string]: string } | null;
     color: string;
     designFile: File | null;
+    activeBrand: Brand | null;
 }
 
-export const TechPackModal: React.FC<TechPackModalProps> = ({ isOpen, onClose, productDetails, finalImages, color, designFile }) => {
+export const TechPackModal: React.FC<TechPackModalProps> = ({ isOpen, onClose, productDetails, finalImages, color, designFile, activeBrand }) => {
     
     if (!isOpen) {
         return null;
@@ -69,10 +71,17 @@ export const TechPackModal: React.FC<TechPackModalProps> = ({ isOpen, onClose, p
                             <p className="text-gray-400">ID Stile: {productDetails.id.toUpperCase()}</p>
                         </div>
                         <div className="text-right">
-                           <div className="flex items-center justify-end gap-2">
-                                <LogoIcon className="h-6 w-6 text-blue-500"/>
-                                <p className="font-bold text-lg text-white">VectorCraft AI</p>
-                           </div>
+                           {activeBrand ? (
+                                <div className="flex items-center justify-end gap-2">
+                                    {activeBrand.logoImage && <img src={activeBrand.logoImage} alt={`${activeBrand.name} Logo`} className="h-8 object-contain"/>}
+                                    <p className="font-bold text-lg text-white">{activeBrand.name}</p>
+                               </div>
+                           ) : (
+                                <div className="flex items-center justify-end gap-2">
+                                    <LogoIcon className="h-6 w-6 text-blue-500"/>
+                                    <p className="font-bold text-lg text-white">VectorCraft AI</p>
+                               </div>
+                           )}
                            <p className="text-sm text-gray-400">Data: {today}</p>
                         </div>
                     </div>

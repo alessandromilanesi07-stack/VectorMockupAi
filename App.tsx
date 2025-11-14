@@ -1,14 +1,14 @@
-
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MockupStudio } from './components/VectorWrapStudio';
-import { ImageEditor } from './components/ImageEditor';
+import { AdvancedEditor } from './components/AdvancedEditor';
 import { ImageGenerator } from './components/ImageGenerator';
 import { SketchToMockup } from './components/SketchToMockup';
-import { BrandKit } from './components/BrandKit';
+import { BrandHub } from './components/BrandHub';
 import { TrendForecaster } from './components/TrendForecaster';
 import { Copywriter } from './components/Copywriter';
 import { Sourcing } from './components/Sourcing';
+import { ThinkingMode } from './components/ThinkingMode';
 import type { View, Brand, SavedProduct } from './types';
 
 const App: React.FC = () => {
@@ -42,10 +42,15 @@ const App: React.FC = () => {
         />;
       case 'sketch':
         return <SketchToMockup />;
-      case 'brand':
-        return <BrandKit setBrands={setBrands} />;
+      case 'brandHub':
+        return <BrandHub 
+            brands={brands}
+            setBrands={setBrands}
+            activeBrandId={activeBrandId}
+            setActiveBrandId={setActiveBrandId}
+          />;
       case 'editor':
-        return <ImageEditor 
+        return <AdvancedEditor 
           imageForEditing={imageForEditing} 
           setImageForEditing={setImageForEditing}
           activeBrand={activeBrand}
@@ -58,6 +63,8 @@ const App: React.FC = () => {
         return <Copywriter activeBrand={activeBrand} />;
       case 'sourcing':
         return <Sourcing />;
+      case 'thinking':
+        return <ThinkingMode />;
       default:
         return <MockupStudio 
           setCurrentView={setCurrentView} 

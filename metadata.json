@@ -1,5 +1,7 @@
 {
   "name": "VectorCraft AI",
   "description": "A next-generation design suite that transforms ideas into production-ready assets. Features include multimodal input (text, sketch-to-vector), an intelligent Brand Kit extractor, AI-powered mockup generation, and instant code export (HTML/CSS) to bridge the gap between design and development.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

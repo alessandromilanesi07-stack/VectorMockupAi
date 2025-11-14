@@ -1,5 +1,4 @@
-
-export type View = 'studio' | 'editor' | 'generator' | 'sketch' | 'brand' | 'trends' | 'copywriter' | 'sourcing';
+export type View = 'studio' | 'editor' | 'generator' | 'sketch' | 'brandHub' | 'trends' | 'copywriter' | 'sourcing' | 'thinking';
 
 export interface GroundingChunk {
   web?: {
@@ -40,6 +39,7 @@ export interface Brand {
     id: string;
     name: string;
     kit: BrandKitData;
+    logoImage?: string; // Base64 data URL of the logo
     products?: SavedProduct[];
 }
 

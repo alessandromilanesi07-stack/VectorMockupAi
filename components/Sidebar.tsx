@@ -1,7 +1,6 @@
-
 import React from 'react';
 import type { View, Brand } from '../types';
-import { StudioIcon, EditIcon, GenerateIcon, LogoIcon, SketchIcon, BrandIcon, TrendIcon, CopywriterIcon, PlusIcon, SourcingIcon } from './Icons';
+import { StudioIcon, EditIcon, GenerateIcon, LogoIcon, SketchIcon, BrandIcon, TrendIcon, CopywriterIcon, PlusIcon, SourcingIcon, ThinkIcon } from './Icons';
 
 interface SidebarProps {
   currentView: View;
@@ -40,7 +39,7 @@ const BrandHubSelector: React.FC<{
             </select>
         ) : (
              <button
-                onClick={() => setCurrentView('brand')}
+                onClick={() => setCurrentView('brandHub')}
                 className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 text-gray-400 hover:bg-gray-700 hover:text-white bg-gray-900/50 border-2 border-dashed border-gray-600"
             >
                 <PlusIcon className="h-4 w-4 mr-2" />
@@ -77,10 +76,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, b
           <NavItem view="studio" label="Mockup Studio" icon={<StudioIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="sourcing" label="Sourcing Database" icon={<SourcingIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="sketch" label="Sketch to Mockup" icon={<SketchIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="brand" label="Brand Kit" icon={<BrandIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+          <NavItem view="brandHub" label="Brand Hub" icon={<BrandIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="trends" label="Trend Forecaster" icon={<TrendIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="copywriter" label="AI Copywriter" icon={<CopywriterIcon />} currentView={currentView} setCurrentView={setCurrentView} />
-          <NavItem view="editor" label="Social Post Composer" icon={<EditIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+          <NavItem view="thinking" label="AI Assistant" icon={<ThinkIcon />} currentView={currentView} setCurrentView={setCurrentView} />
+          <NavItem view="editor" label="Advanced Editor" icon={<EditIcon />} currentView={currentView} setCurrentView={setCurrentView} />
           <NavItem view="generator" label="Image Generator" icon={<GenerateIcon />} currentView={currentView} setCurrentView={setCurrentView} />
         </nav>
          <BrandHubSelector 

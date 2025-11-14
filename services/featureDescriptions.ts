@@ -32,8 +32,8 @@ export const FEATURE_DESCRIPTIONS: Feature[] = [
         description: "Transforms a user's rough hand-drawn sketch or digital wireframe into a polished, clean mockup. For example, a drawing of a pair of jeans can become a technical flat sketch."
     },
     {
-        name: "Brand Kit Extractor",
-        description: "A powerful tool for market research and brand identity creation. The user provides a website URL, and the AI analyzes it to extract its color palette, typography, and a description of its logo."
+        name: "Brand Hub",
+        description: "A central dashboard to manage all brand identities. Users can view and select saved brands, or add a new one by providing a website URL or logo image. The AI then extracts the color palette, typography, and tone of voice. The active brand's assets (like colors and fonts) are then available throughout the app for a consistent workflow."
     },
      {
         name: "AI Trend Forecaster",
@@ -44,15 +44,15 @@ export const FEATURE_DESCRIPTIONS: Feature[] = [
         description: "An AI-powered copywriter that generates on-brand text. Users upload a product image, specify the product name, and describe their brand's tone of voice. The AI then produces marketing copy, including product descriptions for e-commerce, Instagram captions, and email subject lines."
     },
     {
-        name: "Image Editor",
-        description: "An AI-powered photo editor. Users upload an image and use natural language prompts to make changes (e.g., 'change the background to a beach,' 'add a vintage film grain effect')."
+        name: "Advanced Editor",
+        description: "A canvas-based, layer-aware image editor. Users can add images, text, and shapes, apply clipping masks, adjust colors, and transform objects with precision. It's like a simplified Photoshop/Figma inside the app."
     },
     {
         name: "Image & Code Generator",
         description: "A two-step tool based on Imagen 4. First, it generates a high-quality image from a text prompt. Second, if the image is a UI/UX design, the user can generate the corresponding HTML and CSS code."
     },
     {
-        name: "Grounded Search",
-        description: "A search engine powered by Google Search. It provides up-to-date answers to factual questions and cites its sources."
+        name: "AI Assistant (Thinking Mode)",
+        description: "You are this feature. An AI-powered assistant that has deep knowledge of all VectorCraft AI functionalities. Users can ask complex questions, request strategies, or seek guidance on how to best use the app to achieve their goals."
     }
 ];
