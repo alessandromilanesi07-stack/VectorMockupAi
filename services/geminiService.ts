@@ -1,7 +1,7 @@
 // FIX: Add Type to imports for JSON schema functionality.
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 // FIX: Import all necessary types.
-import type { ApplicationType, BrandKitData, GroundingChunk, MarketingCopy } from '../types';
+import type { ApplicationType, BrandKitData, GroundingChunk, MarketingCopy, MockupProduct, MockupView } from '../types';
 
 if (!process.env.API_KEY) {
   throw new Error("API_KEY environment variable is not set");
@@ -32,23 +32,80 @@ const fileToGenerativePart = (file: File) => {
   });
 };
 
-export const generateBlankMockup = async (prompt: string): Promise<string> => {
-    const fullPrompt = `A photorealistic, front-facing, studio-lit, vector illustration of a ${prompt}. The background must be a solid, neutral gray (#cccccc). The item should be clean, wrinkle-free, and perfectly centered. The style must be a flat vector illustration, not a photograph.`;
+const viewPrompts: Record<MockupView, string> = {
+    frontal: 'front-facing view',
+    retro: 'rear view, showing the back',
+    lato_sx: 'left side view, profile',
+    lato_dx: 'right side view, profile'
+};
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: fullPrompt }] },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            temperature: 0.1,
-        },
+export const generateMockupViews = async (basePrompt: string, category: MockupProduct['category']): Promise<Record<MockupView, string>> => {
+    const views: MockupView[] = ['frontal', 'retro', 'lato_sx', 'lato_dx'];
+    
+    const generationPromises = views.map(async (view) => {
+        let fullPrompt = `Generate a technical flat vector illustration for a clothing tech pack. The specific view to generate is the **${viewPrompts[view]}**. The product is a ${basePrompt}.
+
+**CRITICAL RULES FOR CONSISTENCY AND STYLE:**
+1.  This is one of four views (front, back, left side, right side) of the **exact same garment**. All views MUST have identical proportions, dimensions, and style details. The garment's scale and size must not change between views.
+2.  The style must be a clean, flat vector illustration with a crisp black outline on all edges and seams. It should look like a technical drawing, not a photograph.
+3.  Include basic seam lines (e.g., on the collar, hem, sleeves) but avoid any photorealistic shading, shadows, or complex fabric textures.
+4.  The garment must be perfectly centered, clean, and wrinkle-free on a solid, neutral gray background (#cccccc).`;
+        
+        const topsCategories: MockupProduct['category'][] = ['Tops', 'Felpe', 'Outerwear'];
+        if (topsCategories.includes(category)) {
+            fullPrompt += `
+5. **Sleeve Position:** The sleeves must be perfectly straight and spread out wide to the sides, creating a T-shape, to allow for easy application of graphics.`;
+        }
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts: [{ text: fullPrompt }] },
+            config: {
+                responseModalities: [Modality.IMAGE],
+                temperature: 0.1,
+            },
+        });
+
+        const firstPart = response.candidates?.[0]?.content?.parts?.[0];
+        if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
+            return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
+        }
+        throw new Error(`Failed to generate the ${view} mockup from the prompt.`);
     });
 
-    const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-    if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-        return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
-    }
-    throw new Error("Failed to generate a blank mockup from the prompt.");
+    const results = await Promise.all(generationPromises);
+    
+    const finalViews: Record<MockupView, string> = {
+        frontal: results[0],
+        retro: results[1],
+        lato_sx: results[2],
+        lato_dx: results[3],
+    };
+
+    return finalViews;
+};
+
+export const generateDesignPrompt = async (productName: string): Promise<string> => {
+    const prompt = `You are a creative director for a modern streetwear brand. Generate a short, creative prompt for a vector graphic to be printed on a "${productName}".
+    The style must be modern, trendy, and suitable for a vector logo. It should be simple, bold, and easily scalable.
+    The output should be on a transparent background.
+    Example Prompts:
+    - a minimalist roaring tiger logo, line art style
+    - a stylized phoenix rising from ashes, geometric vector art
+    - a simple wave icon in a circle, Japanese art style
+    - a retro-inspired astronaut helmet with a floral pattern
+    
+    Provide ONLY the prompt text itself, with no introductory phrases like "Here is a prompt:".`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            temperature: 0.9,
+        }
+    });
+
+    return response.text.trim();
 };
 
 export const generateVectorGraphic = async (prompt: string): Promise<string> => {
@@ -109,19 +166,19 @@ const getSystemPrompt = (): string => {
     3.  **OUTPUT DIRETTO:** Rispondi SOLO con l'immagine finale. Nessun testo, nessuna spiegazione.`;
 };
 
-const getUserPrompt = (applicationType: ApplicationType): string => {
+const getUserPrompt = (applicationType: ApplicationType, placement: string): string => {
     if (applicationType === 'Embroidery') {
         return `Applica il design fornito sul mockup di felpa.
     Simula un RICAMO (embroidery) fotorealistico e dettagliato.
     Crea una texture visibile con fili (thread texture), un leggero rilievo tridimensionale (slight 3D elevation), e un effetto lucido (satin stitch sheen) dove la luce colpirebbe i fili.
     Mantieni i bordi del ricamo netti e definiti.
-    Posizionalo sul petto, lato sinistro.`;
+    Posizionalo accuratamente in questa area: ${placement}.`;
     }
     // Default to 'Print'
     return `Applica il design fornito sul mockup di t-shirt.
     Simula una stampa DTG (Direct-to-Garment) di altissima qualità.
     Il design deve apparire piatto, con colori vividi e integrato nel tessuto, rispettando le lievi pieghe del capo.
-    Posizionalo al centro del petto.`;
+    Posizionalo accuratamente in questa area: ${placement}.`;
 }
 
 
@@ -129,7 +186,9 @@ export const applyVectorToMockup = async (
     mockupImage: File, 
     designImage: File, 
     applicationType: ApplicationType,
-    onStatusUpdate?: (status: string) => void
+    placement: string,
+    onStatusUpdate?: (status: string) => void,
+    feedback?: string
 ): Promise<string> => {
     const MAX_RETRIES = 2; // As per spec
 
@@ -140,10 +199,14 @@ export const applyVectorToMockup = async (
         const designPart = await fileToGenerativePart(designImage);
 
         const systemInstruction = getSystemPrompt();
-        let userInstruction = getUserPrompt(applicationType);
+        let userInstruction = getUserPrompt(applicationType, placement);
         
         if (attempt > 1) {
             userInstruction += "\n\n**ATTENTION:** The previous attempt failed quality validation. Be extremely strict in adhering to the Key Rules. Maintain the vector style and do not alter the mockup base.";
+        }
+        
+        if (feedback) {
+            userInstruction += `\n\n**USER FEEDBACK FOR IMPROVEMENT:** The previous result was not satisfactory. Please regenerate the image, taking the following user feedback into account: "${feedback}"`;
         }
 
         const parts = [mockupPart, designPart, { text: userInstruction }];

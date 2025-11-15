@@ -16,6 +16,8 @@ export type View =
   | 'copywriter'
   | 'sourcing';
 
+export type MockupView = 'frontal' | 'retro' | 'lato_sx' | 'lato_dx';
+
 
 export interface BrandKitData {
     colors: {
@@ -111,4 +113,28 @@ export interface Manufacturer {
     website: string;
     whatsapp?: string;
   };
+}
+
+export interface CustomizationOption {
+  id: string;
+  name: string;
+  description: string; // Used in the prompt
+}
+
+export interface MockupCustomization {
+  id: string;
+  name: string;
+  options: CustomizationOption[];
+  defaultOptionId: string;
+}
+
+export interface MockupProduct {
+  id: string;
+  name: string;
+  category: 'Tops' | 'Felpe' | 'Outerwear' | 'Pantaloni' | 'Accessori';
+  description: string;
+  fit: string; // Base fit description
+  printArea: string;
+  icon: string;
+  customizations?: MockupCustomization[];
 }

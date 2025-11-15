@@ -1,12 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import saveAs from 'file-saver';
-import { applyVectorToMockup, generateBlankMockup, generateVectorGraphic } from '../services/geminiService';
+import { applyVectorToMockup, generateMockupViews, generateVectorGraphic, generateDesignPrompt } from '../services/geminiService';
 import { trackEvent } from '../services/analytics';
 import { sanitizeSvgInput, optimizeSvgOutput } from '../services/vectorService';
 import { Spinner } from './Spinner';
-import { UploadIcon, DownloadIcon, WandIcon } from './Icons';
-import type { ApplicationType } from '../types';
-import { productCategories, products, MockupProduct } from './mockup/data';
+import { UploadIcon, DownloadIcon, WandIcon, ThumbsUpIcon, ThumbsDownIcon, RefreshIcon, EditIcon } from './Icons';
+import type { ApplicationType, MockupProduct, MockupView } from '../types';
+import { productCategories, products } from './mockup/data';
 import * as ProductIcons from './mockup/icons';
 
 const MAX_MOCKUP_SIZE_MB = 5;
@@ -17,6 +17,14 @@ const base64ToFile = (base64: string, filename: string): Promise<File> => {
         .then(res => res.blob())
         .then(blob => new File([blob], filename, { type: blob.type }));
 };
+
+const viewDisplayNames: Record<MockupView, string> = {
+    frontal: 'Frontale',
+    retro: 'Retro',
+    lato_sx: 'Lato Sinistro',
+    lato_dx: 'Lato Destro',
+};
+
 
 const FileInput: React.FC<{
   onFileSelect: (file: File) => void;
@@ -78,13 +86,15 @@ const GenerationPanel: React.FC<{
     setPrompt?: (p: string) => void;
     onGenerate: () => void;
     isLoading: boolean;
-    generatedImage: string | null;
+    generatedImage?: string | null;
+    generatedImages?: Record<MockupView, string> | null;
+    selectedMockupView?: MockupView;
+    setSelectedMockupView?: (view: MockupView) => void;
     uploadedFile: File | null;
     source: 'upload' | 'generate';
     setSource: (s: 'upload' | 'generate') => void;
     onFileSelect: (f: File) => void;
     maxSizeMB: number;
-    // New props for mockup selection
     isMockupPanel?: boolean;
     selectedCategory?: MockupProduct['category'];
     setSelectedCategory?: (category: MockupProduct['category']) => void;
@@ -94,13 +104,20 @@ const GenerationPanel: React.FC<{
     setMockupColor?: (color: string) => void;
     mockupCustomizations?: { [key: string]: string };
     setMockupCustomization?: (customizationId: string, optionId: string) => void;
+    onGenerateIdea?: () => void;
+    isGeneratingIdea?: boolean;
 }> = ({ 
-    title, prompt, setPrompt, onGenerate, isLoading, generatedImage, uploadedFile, source, setSource, onFileSelect, maxSizeMB,
-    isMockupPanel, selectedCategory, setSelectedCategory, selectedProduct, setSelectedProduct, mockupColor, setMockupColor, mockupCustomizations, setMockupCustomization 
+    title, prompt, setPrompt, onGenerate, isLoading, generatedImage, generatedImages, selectedMockupView, setSelectedMockupView, uploadedFile, source, setSource, onFileSelect, maxSizeMB,
+    isMockupPanel, selectedCategory, setSelectedCategory, selectedProduct, setSelectedProduct, mockupColor, setMockupColor, mockupCustomizations, setMockupCustomization,
+    onGenerateIdea, isGeneratingIdea
 }) => {
-    const displayImage = uploadedFile ? URL.createObjectURL(uploadedFile) : generatedImage;
+    const displayImage = isMockupPanel 
+        ? (uploadedFile ? URL.createObjectURL(uploadedFile) : (generatedImages && selectedMockupView ? generatedImages[selectedMockupView] : null))
+        : (uploadedFile ? URL.createObjectURL(uploadedFile) : generatedImage);
 
     const filteredProducts = products.filter(p => p.category === selectedCategory);
+    
+    const anyDesignLoading = isLoading || isGeneratingIdea;
 
     return (
         <div className="bg-gray-800 p-4 rounded-xl flex flex-col h-full">
@@ -111,10 +128,10 @@ const GenerationPanel: React.FC<{
             </div>
             
             <div className="w-full aspect-square bg-gray-900 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden mb-3">
-                 {isLoading ? (
+                 {isLoading || isGeneratingIdea ? (
                     <div className="text-center">
                         <Spinner large />
-                        <p className="mt-2 text-sm text-gray-400">Generating...</p>
+                        <p className="mt-2 text-sm text-gray-400">{isMockupPanel ? 'Generating views...' : 'Generating...'}</p>
                     </div>
                 ) : displayImage ? (
                     <img src={displayImage} alt="Asset" className="w-full h-full object-contain" />
@@ -123,6 +140,21 @@ const GenerationPanel: React.FC<{
                 )}
             </div>
             
+            {isMockupPanel && generatedImages && (
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                    {(Object.keys(generatedImages) as MockupView[]).map(view => (
+                        <button 
+                            key={view}
+                            onClick={() => setSelectedMockupView?.(view)}
+                            className={`aspect-square rounded-md overflow-hidden ring-2 transition-all ${selectedMockupView === view ? 'ring-blue-500' : 'ring-transparent hover:ring-gray-500'}`}
+                            title={`View ${viewDisplayNames[view]}`}
+                        >
+                            <img src={generatedImages[view]} alt={`${view} view`} className="w-full h-full object-contain bg-gray-700" />
+                        </button>
+                    ))}
+                </div>
+            )}
+
             <div className="flex-grow flex flex-col">
                 {source === 'generate' ? (
                     isMockupPanel ? (
@@ -184,10 +216,16 @@ const GenerationPanel: React.FC<{
                                 onChange={(e) => setPrompt?.(e.target.value)}
                                 placeholder={`e.g., roaring tiger logo, line art`}
                                 className="w-full h-24 bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white mb-2 flex-grow"
+                                disabled={anyDesignLoading}
                             />
-                            <button onClick={onGenerate} disabled={isLoading || !prompt} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
-                                {isLoading ? <Spinner /> : <><WandIcon /> Generate {title.split('. ')[1]}</>}
-                            </button>
+                            <div className="flex flex-col gap-2">
+                                <button onClick={onGenerate} disabled={anyDesignLoading || !prompt} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-600">
+                                    {isLoading ? <Spinner /> : <><EditIcon className="w-5 h-5" /> Generate from Prompt</>}
+                                </button>
+                                <button onClick={onGenerateIdea} disabled={anyDesignLoading} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
+                                    {isGeneratingIdea ? <Spinner /> : <><WandIcon /> Generate with AI</>}
+                                </button>
+                            </div>
                         </>
                     )
                 ) : (
@@ -214,20 +252,41 @@ export const MockupStudio: React.FC = () => {
     const [mockupCustomizations, setMockupCustomizations] = useState<{ [key: string]: string }>({});
 
     // Generated asset states
-    const [generatedMockup, setGeneratedMockup] = useState<string | null>(null);
+    const [generatedMockups, setGeneratedMockups] = useState<Record<MockupView, string> | null>(null);
+    const [selectedMockupView, setSelectedMockupView] = useState<MockupView>('frontal');
     const [generatedDesign, setGeneratedDesign] = useState<string | null>(null);
 
     // Final result states
     const [applicationType, setApplicationType] = useState<ApplicationType>('Print');
-    const [resultImage, setResultImage] = useState<string | null>(null);
+    const [placement, setPlacement] = useState<string>('');
+    const [resultImages, setResultImages] = useState<Partial<Record<MockupView, string>>>({});
+    const [viewForApplication, setViewForApplication] = useState<MockupView>('frontal');
     
     // Loading and error states
     const [isGeneratingMockup, setIsGeneratingMockup] = useState(false);
     const [isGeneratingDesign, setIsGeneratingDesign] = useState(false);
+    const [isGeneratingIdea, setIsGeneratingIdea] = useState(false);
     const [isApplyingDesign, setIsApplyingDesign] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+    // Feedback states
+    const [userRating, setUserRating] = useState<'good' | 'bad' | null>(null);
+    const [feedbackText, setFeedbackText] = useState('');
     
+    const availablePlacements = useMemo(() => {
+        if (!selectedProduct?.printArea) return [];
+        return selectedProduct.printArea.split(',').map(p => p.trim());
+    }, [selectedProduct]);
+
+    useEffect(() => {
+        if (availablePlacements.length > 0) {
+            setPlacement(availablePlacements[0]);
+        } else {
+            setPlacement('');
+        }
+    }, [availablePlacements]);
+
     useEffect(() => {
         // Set default product for the newly selected category
         const firstProductInCategory = products.find(p => p.category === selectedCategory);
@@ -250,9 +309,9 @@ export const MockupStudio: React.FC = () => {
         setMockupCustomizations(prev => ({ ...prev, [customizationId]: optionId }));
     };
 
-    const hasMockup = mockupFile || generatedMockup;
+    const hasMockup = mockupFile || generatedMockups;
     const hasDesign = designFile || generatedDesign;
-    const canApply = hasMockup && hasDesign && !isApplyingDesign && !isGeneratingMockup && !isGeneratingDesign;
+    const canApply = hasMockup && hasDesign && !!placement && !isApplyingDesign && !isGeneratingMockup && !isGeneratingDesign && !isGeneratingIdea;
 
     const handleGenerateMockup = useCallback(async () => {
         if (!selectedProduct) {
@@ -263,9 +322,15 @@ export const MockupStudio: React.FC = () => {
         setIsGeneratingMockup(true);
         setError(null);
         setMockupFile(null);
-        setGeneratedMockup(null);
+        setGeneratedMockups(null);
+        setResultImages({});
 
-        let promptParts = [mockupColor];
+        const promptParts = [];
+
+        // Start with a clear description of the product and its color
+        promptParts.push(`${selectedProduct.description} in the color ${mockupColor}`);
+        
+        // Add details about fit and other customizations
         if (selectedProduct.customizations) {
             selectedProduct.customizations.forEach(customization => {
                 const selectedOptionId = mockupCustomizations[customization.id];
@@ -277,13 +342,13 @@ export const MockupStudio: React.FC = () => {
         } else if (selectedProduct.fit !== 'N/A') {
             promptParts.push(selectedProduct.fit);
         }
-        promptParts.push(selectedProduct.description);
 
         const finalPrompt = promptParts.join(', ');
 
         try {
-            const result = await generateBlankMockup(finalPrompt);
-            setGeneratedMockup(result);
+            const results = await generateMockupViews(finalPrompt, selectedProduct.category);
+            setGeneratedMockups(results);
+            setSelectedMockupView('frontal'); // Default to front view
             trackEvent('ai_mockup_generated', { 
                 product: selectedProduct.name, 
                 color: mockupColor,
@@ -301,6 +366,7 @@ export const MockupStudio: React.FC = () => {
         setError(null);
         setDesignFile(null);
         setGeneratedDesign(null);
+        setResultImages({});
         try {
             const result = await generateVectorGraphic(designPrompt);
             setGeneratedDesign(result);
@@ -312,34 +378,77 @@ export const MockupStudio: React.FC = () => {
         }
     }, [designPrompt]);
 
-    const handleApplyDesign = useCallback(async () => {
-        if (!canApply) return;
+    const handleGenerateAIDesign = useCallback(async () => {
+        if (!selectedProduct) {
+            setError("Please select a mockup product first.");
+            return;
+        }
+        setIsGeneratingIdea(true);
+        setError(null);
+        setDesignFile(null);
+        setGeneratedDesign(null);
+        setResultImages({});
+        try {
+            const newPrompt = await generateDesignPrompt(selectedProduct.name);
+            setDesignPrompt(newPrompt);
+            const result = await generateVectorGraphic(newPrompt);
+            setGeneratedDesign(result);
+            trackEvent('ai_design_idea_generated', { product: selectedProduct.name });
+        } catch (e) {
+            const errorMessage = e instanceof Error ? e.message : 'Failed to generate AI design';
+            setError(errorMessage);
+            trackEvent('ai_design_idea_failed', { product: selectedProduct.name, error: errorMessage });
+        } finally {
+            setIsGeneratingIdea(false);
+        }
+    }, [selectedProduct]);
+
+
+    const handleApplyDesign = useCallback(async (feedback?: string) => {
+        if (!canApply || !placement) return;
         
-        trackEvent('generation_started', { type: applicationType });
+        if (feedback) {
+            trackEvent('regeneration_started', { type: applicationType, feedback_length: feedback.length, placement });
+            setStatusMessage('Applying your feedback...');
+        } else {
+            trackEvent('generation_started', { type: applicationType, placement });
+            setStatusMessage('Preparing assets...');
+        }
+        
         setIsApplyingDesign(true);
         setError(null);
-        setResultImage(null);
-        setStatusMessage('Preparing assets...');
+        setResultImages(prev => ({...prev, [viewForApplication]: undefined }));
+        setUserRating(null);
 
         try {
-            const mockupForApi = mockupFile ? mockupFile : await base64ToFile(generatedMockup!, 'mockup.png');
+            const mockupSourceImage = mockupFile 
+                ? mockupFile 
+                : (generatedMockups?.[viewForApplication] 
+                    ? await base64ToFile(generatedMockups[viewForApplication], 'mockup.png') 
+                    : null);
+
+            if (!mockupSourceImage) {
+                throw new Error('No mockup source available for the selected view.');
+            }
+
             let designForApi = designFile ? designFile : await base64ToFile(generatedDesign!, 'design.png');
             
-            // Placeholder for backend processing
             designForApi = await sanitizeSvgInput(designForApi);
 
             const generatedImage = await applyVectorToMockup(
-                mockupForApi,
+                mockupSourceImage,
                 designForApi,
                 applicationType,
-                setStatusMessage
+                placement,
+                setStatusMessage,
+                feedback
             );
             
-            // Placeholder for backend processing
             const optimizedImage = await optimizeSvgOutput(generatedImage);
 
-            setResultImage(optimizedImage);
-            trackEvent('generation_succeeded', { type: applicationType });
+            setResultImages(prev => ({...prev, [viewForApplication]: optimizedImage }));
+            setFeedbackText(''); // Clear feedback after use
+            trackEvent('generation_succeeded', { type: applicationType, is_regeneration: !!feedback });
         } catch (e) {
             const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
             setError(errorMessage);
@@ -348,12 +457,12 @@ export const MockupStudio: React.FC = () => {
             setIsApplyingDesign(false);
             setStatusMessage(null);
         }
-    }, [mockupFile, designFile, generatedMockup, generatedDesign, applicationType, canApply]);
+    }, [mockupFile, designFile, generatedMockups, generatedDesign, applicationType, placement, canApply, viewForApplication]);
   
     const handleDownload = () => {
-        if (!resultImage) return;
-        trackEvent('result_downloaded');
-        saveAs(resultImage, `vectormockup_result_${Date.now()}.png`);
+        if (!resultImages[viewForApplication]) return;
+        trackEvent('result_downloaded', { view: viewForApplication });
+        saveAs(resultImages[viewForApplication]!, `vectormockup_result_${viewForApplication}_${Date.now()}.png`);
     };
 
     return (
@@ -369,11 +478,13 @@ export const MockupStudio: React.FC = () => {
                     title="1. Mockup"
                     onGenerate={handleGenerateMockup}
                     isLoading={isGeneratingMockup}
-                    generatedImage={generatedMockup}
+                    generatedImages={generatedMockups}
+                    selectedMockupView={selectedMockupView}
+                    setSelectedMockupView={setSelectedMockupView}
                     uploadedFile={mockupFile}
                     source={mockupSource}
-                    setSource={(s) => { setMockupSource(s); setGeneratedMockup(null); setMockupFile(null); }}
-                    onFileSelect={(f) => { setMockupFile(f); setGeneratedMockup(null); }}
+                    setSource={(s) => { setMockupSource(s); setGeneratedMockups(null); setMockupFile(null); setResultImages({}); }}
+                    onFileSelect={(f) => { setMockupFile(f); setGeneratedMockups(null); setResultImages({}); }}
                     maxSizeMB={MAX_MOCKUP_SIZE_MB}
                     isMockupPanel={true}
                     selectedCategory={selectedCategory}
@@ -396,9 +507,11 @@ export const MockupStudio: React.FC = () => {
                     generatedImage={generatedDesign}
                     uploadedFile={designFile}
                     source={designSource}
-                    setSource={(s) => { setDesignSource(s); setGeneratedDesign(null); setDesignFile(null); }}
-                    onFileSelect={(f) => { setDesignFile(f); setGeneratedDesign(null); }}
+                    setSource={(s) => { setDesignSource(s); setGeneratedDesign(null); setDesignFile(null); setResultImages({}); }}
+                    onFileSelect={(f) => { setDesignFile(f); setGeneratedDesign(null); setResultImages({}); }}
                     maxSizeMB={MAX_DESIGN_SIZE_MB}
+                    onGenerateIdea={handleGenerateAIDesign}
+                    isGeneratingIdea={isGeneratingIdea}
                 />
 
                 {/* Results Panel */}
@@ -412,46 +525,130 @@ export const MockupStudio: React.FC = () => {
                             </div>
                         )}
                         {error && <div className="text-red-400 p-4 text-center text-sm">{error}</div>}
-                        {resultImage && <img src={resultImage} alt="Generated mockup" className="w-full h-full object-contain"/>}
-                        {!isApplyingDesign && !resultImage && !error && <p className="text-gray-500 text-sm">Your result will appear here</p>}
+                        {resultImages[viewForApplication] && !isApplyingDesign && <img src={resultImages[viewForApplication]} alt="Generated mockup" className="w-full h-full object-contain"/>}
+                        {!isApplyingDesign && !resultImages[viewForApplication] && !error && <p className="text-gray-500 text-sm">Your result will appear here</p>}
                     </div>
                     
-                    <div>
-                        <h4 className="text-sm font-bold text-white mb-2">Application Type</h4>
-                        <div className="flex gap-2">
-                            {(['Print', 'Embroidery'] as ApplicationType[]).map(type => (
-                                <label key={type} className="flex-1">
-                                <input
-                                    type="radio"
-                                    name="applicationType"
-                                    value={type}
-                                    checked={applicationType === type}
-                                    onChange={() => setApplicationType(type)}
-                                    className="sr-only"
-                                />
-                                <div className={`p-3 rounded-lg text-center text-sm cursor-pointer transition-all ${applicationType === type ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                                    {type}
-                                </div>
-                                </label>
+                    {Object.values(resultImages).some(Boolean) && (
+                         <div className="grid grid-cols-4 gap-2">
+                            {(Object.keys(viewDisplayNames) as MockupView[]).map(view => (
+                                <button 
+                                    key={view}
+                                    onClick={() => setViewForApplication(view)}
+                                    className={`relative aspect-square rounded-md overflow-hidden ring-2 transition-all ${viewForApplication === view ? 'ring-blue-500' : 'ring-transparent hover:ring-gray-500'}`}
+                                    title={`View ${viewDisplayNames[view]}`}
+                                >
+                                    {resultImages[view] ? (
+                                        <img src={resultImages[view]} alt={`${view} result`} className="w-full h-full object-contain bg-gray-700" />
+                                    ) : (
+                                        <div className="w-full h-full bg-gray-700/50 flex items-center justify-center text-xs text-gray-500 p-1 text-center">
+                                            {generatedMockups?.[view] || mockupFile ? 'Apply Design' : 'N/A'}
+                                        </div>
+                                    )}
+                                </button>
                             ))}
                         </div>
-                    </div>
-
-                    <div className="flex-grow flex flex-col justify-end">
-                        <button
-                            onClick={handleApplyDesign}
-                            disabled={!canApply}
-                            className="w-full inline-flex items-center justify-center px-6 py-4 text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {isApplyingDesign ? <Spinner /> : 'Apply Design'}
-                        </button>
-                        {resultImage && !isApplyingDesign && (
-                            <button
-                                onClick={handleDownload}
-                                className="w-full mt-2 inline-flex items-center justify-center gap-2 px-6 py-3 text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                    )}
+                    
+                    <div className="space-y-3">
+                         <div>
+                            <h4 className="text-sm font-bold text-white mb-2">Vista da modificare</h4>
+                            <select
+                                value={viewForApplication}
+                                onChange={(e) => setViewForApplication(e.target.value as MockupView)}
+                                disabled={!hasMockup || !!mockupFile}
+                                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                             >
-                                <DownloadIcon />
-                                Download
+                                {mockupFile ? (
+                                    <option value="frontal">{viewDisplayNames.frontal}</option>
+                                ) : (
+                                    (Object.keys(viewDisplayNames) as MockupView[]).map(view => (
+                                         <option key={view} value={view}>{viewDisplayNames[view]}</option>
+                                    ))
+                                )}
+                            </select>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-white mb-2">Application Type</h4>
+                            <div className="flex gap-2">
+                                {(['Print', 'Embroidery'] as ApplicationType[]).map(type => (
+                                    <label key={type} className="flex-1">
+                                    <input
+                                        type="radio"
+                                        name="applicationType"
+                                        value={type}
+                                        checked={applicationType === type}
+                                        onChange={() => setApplicationType(type)}
+                                        className="sr-only"
+                                    />
+                                    <div className={`p-3 rounded-lg text-center text-sm cursor-pointer transition-all ${applicationType === type ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                        {type}
+                                    </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-white mb-2">Posizionamento Grafica</h4>
+                            <select
+                                value={placement}
+                                onChange={(e) => setPlacement(e.target.value)}
+                                disabled={!hasMockup || availablePlacements.length === 0}
+                                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                            >
+                                {availablePlacements.length > 0 ? (
+                                    availablePlacements.map(p => <option key={p} value={p}>{p}</option>)
+                                ) : (
+                                    <option>N/A for this product</option>
+                                )}
+                            </select>
+                        </div>
+                    </div>
+                     <div className="flex-grow flex flex-col justify-end">
+                        {resultImages[viewForApplication] && !isApplyingDesign ? (
+                            <div className="space-y-3 pt-3 border-t border-gray-700">
+                                <h4 className="text-sm font-bold text-white text-center">Come valuti il risultato?</h4>
+                                <div className="flex justify-center gap-4">
+                                    <button onClick={() => setUserRating('good')} title="Good" className={`p-3 rounded-full transition-colors ${userRating === 'good' ? 'bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                        <ThumbsUpIcon className="w-5 h-5" />
+                                    </button>
+                                    <button onClick={() => setUserRating('bad')} title="Bad" className={`p-3 rounded-full transition-colors ${userRating === 'bad' ? 'bg-red-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                        <ThumbsDownIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                
+                                {userRating === 'bad' && (
+                                    <div className="space-y-2 animate-fade-in">
+                                        <textarea 
+                                            value={feedbackText}
+                                            onChange={(e) => setFeedbackText(e.target.value)}
+                                            placeholder="Cosa possiamo migliorare? (es. logo più grande, ricamo più scuro)"
+                                            className="w-full h-20 bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white"
+                                        />
+                                        <button
+                                            onClick={() => handleApplyDesign(feedbackText)}
+                                            disabled={!feedbackText || isApplyingDesign}
+                                            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600"
+                                        >
+                                            <RefreshIcon className="w-5 h-5" /> Rigenera con Feedback
+                                        </button>
+                                    </div>
+                                )}
+                                
+                                <button
+                                    onClick={handleDownload}
+                                    className="w-full mt-2 inline-flex items-center justify-center gap-2 px-6 py-3 text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                                >
+                                    <DownloadIcon /> Download
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => handleApplyDesign()}
+                                disabled={!canApply}
+                                className="w-full inline-flex items-center justify-center px-6 py-4 text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isApplyingDesign ? <Spinner /> : 'Apply Design'}
                             </button>
                         )}
                     </div>

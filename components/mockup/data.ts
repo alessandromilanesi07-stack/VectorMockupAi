@@ -1,26 +1,4 @@
-export interface CustomizationOption {
-  id: string;
-  name: string;
-  description: string; // Used in the prompt
-}
-
-export interface MockupCustomization {
-  id: string;
-  name: string;
-  options: CustomizationOption[];
-  defaultOptionId: string;
-}
-
-export interface MockupProduct {
-  id: string;
-  name: string;
-  category: 'Tops' | 'Felpe' | 'Outerwear' | 'Pantaloni' | 'Accessori';
-  description: string;
-  fit: string; // Base fit description
-  printArea: string;
-  icon: string;
-  customizations?: MockupCustomization[];
-}
+import type { MockupProduct, MockupCustomization, CustomizationOption } from '../../types';
 
 export const productCategories: MockupProduct['category'][] = ['Tops', 'Felpe', 'Outerwear', 'Pantaloni', 'Accessori'];
 
@@ -36,9 +14,21 @@ const fitCustomization: MockupCustomization = {
     ]
 };
 
+const sleeveCustomization: MockupCustomization = {
+    id: 'sleeve',
+    name: 'Sleeve Style',
+    defaultOptionId: 'set-in',
+    options: [
+        { id: 'set-in', name: 'Set-in', description: 'Standard set-in sleeves, attached at the shoulder' },
+        { id: 'raglan', name: 'Raglan', description: 'Sporty raglan sleeves with diagonal seams from the collar to the underarm' },
+        { id: 'drop-shoulder', name: 'Drop Shoulder', description: 'Relaxed drop shoulder seams, positioned lower on the arm' },
+    ]
+};
+
+
 export const products: MockupProduct[] = [
   // FELPE
-  { id: 'hoodie-classic', name: 'Classic Hoodie', category: 'Felpe', description: 'Classic pullover hoodie with kangaroo pocket', fit: 'Tailored', printArea: 'Chest, Back', icon: 'HoodieIcon', customizations: [fitCustomization] },
+  { id: 'hoodie-classic', name: 'Classic Hoodie', category: 'Felpe', description: 'Classic pullover hoodie with kangaroo pocket', fit: 'Tailored', printArea: 'Chest, Back', icon: 'HoodieIcon', customizations: [fitCustomization, sleeveCustomization] },
   { id: 'hoodie-zip-up', name: 'Zip-Up Hoodie', category: 'Felpe', description: 'Full zip-up hoodie', fit: 'Tailored', printArea: 'Left Chest, Back', icon: 'ZipHoodieIcon', customizations: [fitCustomization] },
   { id: 'hoodie-half-zip', name: 'Half-Zip Sweatshirt', category: 'Felpe', description: 'Pullover with a half-zip collar', fit: 'Tailored', printArea: 'Left Chest', icon: 'HalfZipIcon', customizations: [fitCustomization] },
   { id: 'crewneck-classic', name: 'Classic Crewneck', category: 'Felpe', description: 'Classic crewneck sweatshirt', fit: 'Tailored', printArea: 'Chest, Back', icon: 'CrewneckIcon', customizations: [fitCustomization] },
@@ -58,7 +48,7 @@ export const products: MockupProduct[] = [
 
   // TOPS
   { id: 't-shirt-basic', name: 'Basic T-Shirt', category: 'Tops', description: 'Classic crew neck t-shirt', fit: 'Tailored', printArea: 'Chest, Back', icon: 'TshirtIcon', customizations: [fitCustomization] },
-  { id: 't-shirt-longsleeve', name: 'Longsleeve T-Shirt', category: 'Tops', description: 'Long-sleeve crew neck t-shirt', fit: 'Tailored', printArea: 'Chest, Back, Sleeves', icon: 'LongsleeveIcon', customizations: [fitCustomization] },
+  { id: 't-shirt-longsleeve', name: 'Longsleeve T-Shirt', category: 'Tops', description: 'Long-sleeve crew neck t-shirt', fit: 'Tailored', printArea: 'Chest, Back, Sleeves', icon: 'LongsleeveIcon', customizations: [fitCustomization, sleeveCustomization] },
   { id: 'polo-shirt', name: 'Polo Shirt', category: 'Tops', description: 'Collared polo shirt with button placket', fit: 'Tailored', printArea: 'Left Chest', icon: 'PoloIcon', customizations: [fitCustomization] },
   { id: 'tank-top', name: 'Tank Top', category: 'Tops', description: 'Sleeveless tank top', fit: 'Skinny', printArea: 'Chest', icon: 'TankTopIcon', customizations: [fitCustomization] },
   { id: 'button-up-shirt', name: 'Button-Up Shirt', category: 'Tops', description: 'Classic long-sleeve button-up shirt', fit: 'Tailored', printArea: 'Pocket, Back', icon: 'OversizeLongsleeveIcon', customizations: [fitCustomization] },

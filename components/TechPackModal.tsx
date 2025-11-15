@@ -1,13 +1,12 @@
 import React from 'react';
-import type { MockupProduct } from './mockup/data';
 import { LogoIcon } from './Icons';
-import type { Brand, MarketingCopy } from '../types';
+import type { Brand, MarketingCopy, MockupProduct, MockupView } from '../types';
 
 interface TechPackModalProps {
     isOpen: boolean;
     onClose: () => void;
     productDetails: MockupProduct;
-    finalImages: { [viewId: string]: string } | null;
+    finalImages: Partial<Record<MockupView, string>> | null;
     color: string;
     designFile: File | null;
     activeBrand: Brand | null;
@@ -21,8 +20,8 @@ export const TechPackModal: React.FC<TechPackModalProps> = ({ isOpen, onClose, p
     }
 
     const today = new Date().toLocaleDateString('it-IT');
-    const viewOrder = ['frontal', 'retro', 'lato_sx', 'lato_dx'];
-    const sortedImages = finalImages ? viewOrder.filter(v => finalImages[v]).map(v => ({ viewId: v, src: finalImages[v] })) : [];
+    const viewOrder: MockupView[] = ['frontal', 'retro', 'lato_sx', 'lato_dx'];
+    const sortedImages = finalImages ? viewOrder.filter(v => finalImages[v]).map(v => ({ viewId: v, src: finalImages[v]! })) : [];
 
     return (
         <div 
