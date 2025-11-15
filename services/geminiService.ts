@@ -57,8 +57,6 @@ const base64ToGenerativePart = (base64Data: string) => {
 const viewPrompts: Record<MockupView, string> = {
     frontal: 'front-facing view',
     retro: 'rear view, showing the back of the garment',
-    lato_sx: 'left side profile view. This view should show the left side of the garment, including the left armhole and side seam.',
-    lato_dx: 'right side profile view. This view should show the right side of the garment, including the right armhole and side seam.'
 };
 
 export const generateMockupViews = async (basePrompt: string, category: MockupProduct['category']): Promise<Record<MockupView, string>> => {
@@ -89,7 +87,7 @@ export const generateMockupViews = async (basePrompt: string, category: MockupPr
     const referenceImagePart = base64ToGenerativePart(frontalImageBase64);
 
     // 2. Generate the other views using the front view as a reference.
-    const otherViews: MockupView[] = ['retro', 'lato_sx', 'lato_dx'];
+    const otherViews: MockupView[] = ['retro'];
     
     const generationPromises = otherViews.map(async (view) => {
         let viewSpecificPrompt = `You will be given a reference image of the **front view** of a garment. Your task is to generate another technical flat vector illustration for the same garment, but for a different view: the **${viewPrompts[view]}**.
@@ -105,15 +103,6 @@ export const generateMockupViews = async (basePrompt: string, category: MockupPr
             if (view === 'retro') {
                  viewSpecificPrompt += `
 5. **Sleeve Position and Length for Back View:** If the garment has sleeves, they must be perfectly straight and spread out wide to the sides, creating a T-shape. This back view must be a perfect mirror of the front view's silhouette and dimensions.`;
-            } else { // lato_sx or lato_dx
-                 viewSpecificPrompt += `
-5. **Side View Sleeve and Body Rules:**
-   - **Sleeve Position:** The sleeve must be in a natural profile position, hanging down slightly forward.
-   - **ABSOLUTE PROPORTIONAL MATCH:** This is the most critical rule for this view.
-     - **Sleeve Length:** The length of the hanging sleeve (from shoulder seam to cuff) MUST BE IDENTICAL to the sleeve length in the T-shaped reference image.
-     - **Sleeve Width/Volume:** The width and overall volume of the sleeve must be consistent with the reference image. If the reference has baggy sleeves, the side view must show baggy sleeves.
-     - **Body Proportions:** The length and width of the garment's body (torso) MUST PERFECTLY MATCH the proportions of the reference image. Do not change the fit (e.g., from baggy to tailored).
-   - **Summary:** The side view must look like the exact same garment from the reference image, just rotated. Every dimension must be respected.`;
             }
         }
 
@@ -141,8 +130,6 @@ export const generateMockupViews = async (basePrompt: string, category: MockupPr
     const finalViews: Record<MockupView, string> = {
         frontal: frontalImageBase64,
         retro: otherResults[0],
-        lato_sx: otherResults[1],
-        lato_dx: otherResults[2],
     };
 
     return finalViews;
@@ -172,7 +159,7 @@ export const generateDesignPrompt = async (productName: string): Promise<string>
 };
 
 export const generateVectorGraphic = async (prompt: string): Promise<string> => {
-    const fullPrompt = `A clean, modern, vector logo of a ${prompt}. The design must be simple, bold, and easily scalable. Crucially, the background MUST be transparent.`;
+    const fullPrompt = `A clean, modern, vector logo of a ${prompt}. The design must be simple, bold, and easily scalable. Crucially, the background MUST be transparent. Do not add any text, words, or letters unless explicitly requested in the prompt.`;
     
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',

@@ -20,7 +20,8 @@ export const TechPackModal: React.FC<TechPackModalProps> = ({ isOpen, onClose, p
     }
 
     const today = new Date().toLocaleDateString('it-IT');
-    const viewOrder: MockupView[] = ['frontal', 'retro', 'lato_sx', 'lato_dx'];
+    // FIX: Removed 'lato_sx' and 'lato_dx' as they are not valid MockupView types.
+    const viewOrder: MockupView[] = ['frontal', 'retro'];
     const sortedImages = finalImages ? viewOrder.filter(v => finalImages[v]).map(v => ({ viewId: v, src: finalImages[v]! })) : [];
 
     return (

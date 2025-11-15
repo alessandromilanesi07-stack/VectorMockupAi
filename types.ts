@@ -16,7 +16,7 @@ export type View =
   | 'copywriter'
   | 'sourcing';
 
-export type MockupView = 'frontal' | 'retro' | 'lato_sx' | 'lato_dx';
+export type MockupView = 'frontal' | 'retro';
 
 
 export interface BrandKitData {

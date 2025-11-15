@@ -21,8 +21,6 @@ const base64ToFile = (base64: string, filename: string): Promise<File> => {
 const viewDisplayNames: Record<MockupView, string> = {
     frontal: 'Frontale',
     retro: 'Retro',
-    lato_sx: 'Lato Sinistro',
-    lato_dx: 'Lato Destro',
 };
 
 
