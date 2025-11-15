@@ -32,34 +32,97 @@ const fileToGenerativePart = (file: File) => {
   });
 };
 
+const base64ToGenerativePart = (base64Data: string) => {
+    const match = base64Data.match(/^data:(image\/\w+);base64,(.*)$/);
+    if (!match) {
+        // Fallback for non-data-URL base64 strings, assuming png
+        return {
+            inlineData: {
+                data: base64Data,
+                mimeType: 'image/png',
+            },
+        };
+    }
+    const mimeType = match[1];
+    const data = match[2];
+    return {
+        inlineData: {
+            data,
+            mimeType,
+        },
+    };
+};
+
+
 const viewPrompts: Record<MockupView, string> = {
     frontal: 'front-facing view',
-    retro: 'rear view, showing the back',
-    lato_sx: 'left side view, profile',
-    lato_dx: 'right side view, profile'
+    retro: 'rear view, showing the back of the garment',
+    lato_sx: 'left side profile view. This view should show the left side of the garment, including the left armhole and side seam.',
+    lato_dx: 'right side profile view. This view should show the right side of the garment, including the right armhole and side seam.'
 };
 
 export const generateMockupViews = async (basePrompt: string, category: MockupProduct['category']): Promise<Record<MockupView, string>> => {
-    const views: MockupView[] = ['frontal', 'retro', 'lato_sx', 'lato_dx'];
+    // 1. Generate the front view first to use as a reference.
+    const frontalPrompt = `Generate a technical flat vector illustration for a clothing tech pack. The specific view to generate is the **front-facing view**. The product is a ${basePrompt}.
+
+**CRITICAL RULES FOR STYLE:**
+1.  The style must be a clean, flat vector illustration with a crisp black outline on all edges and seams. It should look like a technical drawing, not a photograph.
+2.  Include basic seam lines (e.g., on the collar, hem, sleeves) but avoid any photorealistic shading, shadows, or complex fabric textures.
+3.  The garment must be perfectly centered, clean, and wrinkle-free on a solid, neutral gray background (#cccccc).
+4.  **Sleeve Position:** If the garment has sleeves, they must be perfectly straight and spread out wide to the sides, creating a T-shape. If it is sleeveless, do not add sleeves.`;
+
+    const frontalResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [{ text: frontalPrompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+            temperature: 0.1,
+        },
+    });
+
+    const frontalPart = frontalResponse.candidates?.[0]?.content?.parts?.[0];
+    if (!frontalPart || !('inlineData' in frontalPart) || !frontalPart.inlineData) {
+        throw new Error(`Failed to generate the frontal mockup from the prompt.`);
+    }
     
-    const generationPromises = views.map(async (view) => {
-        let fullPrompt = `Generate a technical flat vector illustration for a clothing tech pack. The specific view to generate is the **${viewPrompts[view]}**. The product is a ${basePrompt}.
+    const frontalImageBase64 = `data:${frontalPart.inlineData.mimeType};base64,${frontalPart.inlineData.data}`;
+    const referenceImagePart = base64ToGenerativePart(frontalImageBase64);
+
+    // 2. Generate the other views using the front view as a reference.
+    const otherViews: MockupView[] = ['retro', 'lato_sx', 'lato_dx'];
+    
+    const generationPromises = otherViews.map(async (view) => {
+        let viewSpecificPrompt = `You will be given a reference image of the **front view** of a garment. Your task is to generate another technical flat vector illustration for the same garment, but for a different view: the **${viewPrompts[view]}**.
 
 **CRITICAL RULES FOR CONSISTENCY AND STYLE:**
-1.  This is one of four views (front, back, left side, right side) of the **exact same garment**. All views MUST have identical proportions, dimensions, and style details. The garment's scale and size must not change between views.
-2.  The style must be a clean, flat vector illustration with a crisp black outline on all edges and seams. It should look like a technical drawing, not a photograph.
-3.  Include basic seam lines (e.g., on the collar, hem, sleeves) but avoid any photorealistic shading, shadows, or complex fabric textures.
-4.  The garment must be perfectly centered, clean, and wrinkle-free on a solid, neutral gray background (#cccccc).`;
-        
+1.  **ABSOLUTE DIMENSIONAL ACCURACY:** This is the most important rule. The generated view MUST be dimensionally identical to the reference image. Replicate the exact length, width, and proportions of every part of the garment (body, collar, and especially the sleeves). The overall scale and size must not change.
+2.  **SLEEVELESS GARMENTS:** If the reference image shows a sleeveless garment (like a vest or tank top), the generated view MUST also be sleeveless. Do not add sleeves under any circumstances.
+3.  **BACKGROUND:** The background MUST be the same solid, neutral gray (#cccccc) as the reference image.
+4.  **CLEAN VECTOR STYLE:** Maintain the clean, flat vector style with crisp black outlines. No photorealistic shading or complex textures.`;
+
         const topsCategories: MockupProduct['category'][] = ['Tops', 'Felpe', 'Outerwear'];
         if (topsCategories.includes(category)) {
-            fullPrompt += `
-5. **Sleeve Position:** The sleeves must be perfectly straight and spread out wide to the sides, creating a T-shape, to allow for easy application of graphics.`;
+            if (view === 'retro') {
+                 viewSpecificPrompt += `
+5. **Sleeve Position and Length for Back View:** If the garment has sleeves, they must be perfectly straight and spread out wide to the sides, creating a T-shape. This back view must be a perfect mirror of the front view's silhouette and dimensions.`;
+            } else { // lato_sx or lato_dx
+                 viewSpecificPrompt += `
+5. **Side View Sleeve and Body Rules:**
+   - **Sleeve Position:** The sleeve must be in a natural profile position, hanging down slightly forward.
+   - **ABSOLUTE PROPORTIONAL MATCH:** This is the most critical rule for this view.
+     - **Sleeve Length:** The length of the hanging sleeve (from shoulder seam to cuff) MUST BE IDENTICAL to the sleeve length in the T-shaped reference image.
+     - **Sleeve Width/Volume:** The width and overall volume of the sleeve must be consistent with the reference image. If the reference has baggy sleeves, the side view must show baggy sleeves.
+     - **Body Proportions:** The length and width of the garment's body (torso) MUST PERFECTLY MATCH the proportions of the reference image. Do not change the fit (e.g., from baggy to tailored).
+   - **Summary:** The side view must look like the exact same garment from the reference image, just rotated. Every dimension must be respected.`;
+            }
         }
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            contents: { parts: [{ text: fullPrompt }] },
+            contents: { parts: [
+                { text: viewSpecificPrompt },
+                referenceImagePart // Provide the front view as context
+            ] },
             config: {
                 responseModalities: [Modality.IMAGE],
                 temperature: 0.1,
@@ -73,13 +136,13 @@ export const generateMockupViews = async (basePrompt: string, category: MockupPr
         throw new Error(`Failed to generate the ${view} mockup from the prompt.`);
     });
 
-    const results = await Promise.all(generationPromises);
+    const otherResults = await Promise.all(generationPromises);
     
     const finalViews: Record<MockupView, string> = {
-        frontal: results[0],
-        retro: results[1],
-        lato_sx: results[2],
-        lato_dx: results[3],
+        frontal: frontalImageBase64,
+        retro: otherResults[0],
+        lato_sx: otherResults[1],
+        lato_dx: otherResults[2],
     };
 
     return finalViews;
