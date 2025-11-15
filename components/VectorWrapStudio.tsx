@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import saveAs from 'file-saver';
 import { applyVectorToMockup, generateBlankMockup, generateVectorGraphic } from '../services/geminiService';
 import { trackEvent } from '../services/analytics';
@@ -6,6 +6,8 @@ import { sanitizeSvgInput, optimizeSvgOutput } from '../services/vectorService';
 import { Spinner } from './Spinner';
 import { UploadIcon, DownloadIcon, WandIcon } from './Icons';
 import type { ApplicationType } from '../types';
+import { productCategories, products, MockupProduct } from './mockup/data';
+import * as ProductIcons from './mockup/icons';
 
 const MAX_MOCKUP_SIZE_MB = 5;
 const MAX_DESIGN_SIZE_MB = 2;
@@ -68,10 +70,12 @@ const FileInput: React.FC<{
   );
 };
 
+const iconMap: { [key: string]: React.FC<React.SVGProps<SVGSVGElement>> } = ProductIcons;
+
 const GenerationPanel: React.FC<{
     title: string;
-    prompt: string;
-    setPrompt: (p: string) => void;
+    prompt?: string;
+    setPrompt?: (p: string) => void;
     onGenerate: () => void;
     isLoading: boolean;
     generatedImage: string | null;
@@ -80,8 +84,23 @@ const GenerationPanel: React.FC<{
     setSource: (s: 'upload' | 'generate') => void;
     onFileSelect: (f: File) => void;
     maxSizeMB: number;
-}> = ({ title, prompt, setPrompt, onGenerate, isLoading, generatedImage, uploadedFile, source, setSource, onFileSelect, maxSizeMB }) => {
+    // New props for mockup selection
+    isMockupPanel?: boolean;
+    selectedCategory?: MockupProduct['category'];
+    setSelectedCategory?: (category: MockupProduct['category']) => void;
+    selectedProduct?: MockupProduct | null;
+    setSelectedProduct?: (product: MockupProduct) => void;
+    mockupColor?: string;
+    setMockupColor?: (color: string) => void;
+    mockupCustomizations?: { [key: string]: string };
+    setMockupCustomization?: (customizationId: string, optionId: string) => void;
+}> = ({ 
+    title, prompt, setPrompt, onGenerate, isLoading, generatedImage, uploadedFile, source, setSource, onFileSelect, maxSizeMB,
+    isMockupPanel, selectedCategory, setSelectedCategory, selectedProduct, setSelectedProduct, mockupColor, setMockupColor, mockupCustomizations, setMockupCustomization 
+}) => {
     const displayImage = uploadedFile ? URL.createObjectURL(uploadedFile) : generatedImage;
+
+    const filteredProducts = products.filter(p => p.category === selectedCategory);
 
     return (
         <div className="bg-gray-800 p-4 rounded-xl flex flex-col h-full">
@@ -106,17 +125,71 @@ const GenerationPanel: React.FC<{
             
             <div className="flex-grow flex flex-col">
                 {source === 'generate' ? (
-                    <>
-                        <textarea
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            placeholder={`e.g., ${title === '1. Mockup' ? 'white t-shirt, classic fit' : 'roaring tiger logo, line art'}`}
-                            className="w-full h-24 bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white mb-2 flex-grow"
-                        />
-                        <button onClick={onGenerate} disabled={isLoading || !prompt} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
-                            {isLoading ? <Spinner /> : <><WandIcon /> Generate {title.split('. ')[1]}</>}
-                        </button>
-                    </>
+                    isMockupPanel ? (
+                        <div className="flex-grow flex flex-col space-y-3">
+                            {/* Category Tabs */}
+                            <div className="flex flex-wrap gap-1 bg-gray-900 p-1 rounded-lg">
+                                {productCategories.map(cat => (
+                                    <button 
+                                        key={cat} 
+                                        onClick={() => setSelectedCategory?.(cat)}
+                                        className={`flex-1 px-2 py-1 text-xs rounded-md ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+                                    >{cat}</button>
+                                ))}
+                            </div>
+
+                            {/* Product Grid */}
+                            <div className="grid grid-cols-4 gap-2 overflow-y-auto max-h-48 pr-2">
+                               {filteredProducts.map(prod => {
+                                   const IconComponent = iconMap[prod.icon];
+                                   return (
+                                        <button key={prod.id} onClick={() => setSelectedProduct?.(prod)} className={`p-2 flex flex-col items-center gap-1 rounded-lg transition-colors text-center ${selectedProduct?.id === prod.id ? 'bg-blue-600/50 ring-2 ring-blue-500' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                            {IconComponent && <IconComponent className="w-6 h-6" />}
+                                            <span className="text-xs leading-tight">{prod.name}</span>
+                                        </button>
+                                   );
+                               })}
+                            </div>
+
+                             {/* Customizations & Color */}
+                            <div className="flex flex-col space-y-2">
+                               {selectedProduct?.customizations?.map(cust => (
+                                   <div key={cust.id}>
+                                       <label className="text-xs font-bold text-gray-300">{cust.name}</label>
+                                       <div className="flex gap-1 bg-gray-900 p-1 rounded-lg mt-1">
+                                           {cust.options.map(opt => (
+                                               <button 
+                                                    key={opt.id}
+                                                    onClick={() => setMockupCustomization?.(cust.id, opt.id)}
+                                                    className={`flex-1 px-2 py-1 text-xs rounded-md ${mockupCustomizations?.[cust.id] === opt.id ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+                                               >{opt.name}</button>
+                                           ))}
+                                       </div>
+                                   </div>
+                               ))}
+                                <div>
+                                    <label className="text-xs font-bold text-gray-300">Colore</label>
+                                    <input type="color" value={mockupColor} onChange={(e) => setMockupColor?.(e.target.value)} className="w-full h-8 mt-1 bg-gray-700 border border-gray-600 rounded-lg p-1 cursor-pointer"/>
+                                </div>
+                            </div>
+
+                            <button onClick={onGenerate} disabled={isLoading || !selectedProduct} className="w-full mt-auto flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
+                                {isLoading ? <Spinner /> : <><WandIcon /> Genera Mockup</>}
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <textarea
+                                value={prompt}
+                                onChange={(e) => setPrompt?.(e.target.value)}
+                                placeholder={`e.g., roaring tiger logo, line art`}
+                                className="w-full h-24 bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white mb-2 flex-grow"
+                            />
+                            <button onClick={onGenerate} disabled={isLoading || !prompt} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
+                                {isLoading ? <Spinner /> : <><WandIcon /> Generate {title.split('. ')[1]}</>}
+                            </button>
+                        </>
+                    )
                 ) : (
                     <FileInput onFileSelect={onFileSelect} title="" file={uploadedFile} maxSizeMB={maxSizeMB} />
                 )}
@@ -132,9 +205,14 @@ export const MockupStudio: React.FC = () => {
     const [designFile, setDesignFile] = useState<File | null>(null);
     const [mockupSource, setMockupSource] = useState<'upload' | 'generate'>('generate');
     const [designSource, setDesignSource] = useState<'upload' | 'generate'>('generate');
-    const [mockupPrompt, setMockupPrompt] = useState<string>('black hoodie, classic fit, vector illustration');
     const [designPrompt, setDesignPrompt] = useState<string>('minimalist roaring tiger logo, line art style, on transparent background');
     
+    // New Mockup Generation State
+    const [selectedCategory, setSelectedCategory] = useState<MockupProduct['category']>(productCategories[0]);
+    const [selectedProduct, setSelectedProduct] = useState<MockupProduct | null>(products.find(p => p.id === 'hoodie-classic') || products[0]);
+    const [mockupColor, setMockupColor] = useState<string>('#111827');
+    const [mockupCustomizations, setMockupCustomizations] = useState<{ [key: string]: string }>({});
+
     // Generated asset states
     const [generatedMockup, setGeneratedMockup] = useState<string | null>(null);
     const [generatedDesign, setGeneratedDesign] = useState<string | null>(null);
@@ -150,25 +228,73 @@ export const MockupStudio: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     
+    useEffect(() => {
+        // Set default product for the newly selected category
+        const firstProductInCategory = products.find(p => p.category === selectedCategory);
+        setSelectedProduct(firstProductInCategory || null);
+    }, [selectedCategory]);
+
+    useEffect(() => {
+        if (selectedProduct?.customizations) {
+            const defaults = selectedProduct.customizations.reduce((acc, cust) => {
+                acc[cust.id] = cust.defaultOptionId;
+                return acc;
+            }, {} as {[key: string]: string});
+            setMockupCustomizations(defaults);
+        } else {
+            setMockupCustomizations({});
+        }
+    }, [selectedProduct]);
+
+    const handleSetCustomization = (customizationId: string, optionId: string) => {
+        setMockupCustomizations(prev => ({ ...prev, [customizationId]: optionId }));
+    };
+
     const hasMockup = mockupFile || generatedMockup;
     const hasDesign = designFile || generatedDesign;
     const canApply = hasMockup && hasDesign && !isApplyingDesign && !isGeneratingMockup && !isGeneratingDesign;
 
     const handleGenerateMockup = useCallback(async () => {
+        if (!selectedProduct) {
+            setError("Please select a product to generate.");
+            return;
+        }
+
         setIsGeneratingMockup(true);
         setError(null);
         setMockupFile(null);
         setGeneratedMockup(null);
+
+        let promptParts = [mockupColor];
+        if (selectedProduct.customizations) {
+            selectedProduct.customizations.forEach(customization => {
+                const selectedOptionId = mockupCustomizations[customization.id];
+                const selectedOption = customization.options.find(opt => opt.id === selectedOptionId);
+                if (selectedOption) {
+                    promptParts.push(selectedOption.description);
+                }
+            });
+        } else if (selectedProduct.fit !== 'N/A') {
+            promptParts.push(selectedProduct.fit);
+        }
+        promptParts.push(selectedProduct.description);
+
+        const finalPrompt = promptParts.join(', ');
+
         try {
-            const result = await generateBlankMockup(mockupPrompt);
+            const result = await generateBlankMockup(finalPrompt);
             setGeneratedMockup(result);
-            trackEvent('ai_mockup_generated');
+            trackEvent('ai_mockup_generated', { 
+                product: selectedProduct.name, 
+                color: mockupColor,
+                customizations: mockupCustomizations 
+            });
         } catch(e) {
             setError(e instanceof Error ? e.message : 'Failed to generate mockup');
         } finally {
             setIsGeneratingMockup(false);
         }
-    }, [mockupPrompt]);
+    }, [selectedProduct, mockupColor, mockupCustomizations]);
 
     const handleGenerateDesign = useCallback(async () => {
         setIsGeneratingDesign(true);
@@ -241,8 +367,6 @@ export const MockupStudio: React.FC = () => {
                 {/* Mockup Panel */}
                 <GenerationPanel 
                     title="1. Mockup"
-                    prompt={mockupPrompt}
-                    setPrompt={setMockupPrompt}
                     onGenerate={handleGenerateMockup}
                     isLoading={isGeneratingMockup}
                     generatedImage={generatedMockup}
@@ -251,6 +375,15 @@ export const MockupStudio: React.FC = () => {
                     setSource={(s) => { setMockupSource(s); setGeneratedMockup(null); setMockupFile(null); }}
                     onFileSelect={(f) => { setMockupFile(f); setGeneratedMockup(null); }}
                     maxSizeMB={MAX_MOCKUP_SIZE_MB}
+                    isMockupPanel={true}
+                    selectedCategory={selectedCategory}
+                    setSelectedCategory={setSelectedCategory}
+                    selectedProduct={selectedProduct}
+                    setSelectedProduct={setSelectedProduct}
+                    mockupColor={mockupColor}
+                    setMockupColor={setMockupColor}
+                    mockupCustomizations={mockupCustomizations}
+                    setMockupCustomization={handleSetCustomization}
                 />
 
                 {/* Design Panel */}
