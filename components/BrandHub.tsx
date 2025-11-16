@@ -184,7 +184,7 @@ export const BrandHub: React.FC<BrandHubProps> = ({ brands, setBrands, activeBra
                     <div className="relative">
                         <input
                             type="text"
-                            className="w-full bg-gray-700 border border-gray-600 rounded-full py-3 pl-5 pr-32 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="custom-input w-full rounded-full py-3 pl-5 pr-32"
                             placeholder="e.g., google.com"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
@@ -193,7 +193,7 @@ export const BrandHub: React.FC<BrandHubProps> = ({ brands, setBrands, activeBra
                         <button
                             onClick={handleSubmit}
                             disabled={loading || !url}
-                            className="absolute inset-y-0 right-0 flex items-center justify-center px-6 my-1.5 mr-1.5 text-sm font-medium rounded-full text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500"
+                            className="absolute inset-y-0 right-0 my-1.5 mr-1.5 btn btn-primary !rounded-full !px-6"
                         >
                             {loading ? <Spinner /> : 'Extract'}
                         </button>
@@ -216,7 +216,7 @@ export const BrandHub: React.FC<BrandHubProps> = ({ brands, setBrands, activeBra
                          <button
                             onClick={handleSubmit}
                             disabled={loading || !imageFile}
-                            className="w-full inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                            className="w-full btn btn-primary"
                         >
                             {loading ? <Spinner /> : 'Extract from Image'}
                         </button>
@@ -268,7 +268,7 @@ export const BrandHub: React.FC<BrandHubProps> = ({ brands, setBrands, activeBra
                     <div className="text-center border-t border-gray-700 pt-6">
                         <button
                             onClick={handleSaveBrand}
-                            className="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                            className="btn bg-green-600 hover:bg-green-700"
                         >
                            <PlusIcon className="w-5 h-5 mr-2" /> Salva nel Brand Hub
                         </button>

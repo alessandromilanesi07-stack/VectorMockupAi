@@ -30,7 +30,7 @@ const BrandHubSelector: React.FC<{
             <select 
                 value={activeBrandId || ''} 
                 onChange={(e) => setActiveBrandId(e.target.value || null)}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white focus:ring-2 focus:ring-blue-500"
+                className="custom-select w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white"
             >
                 <option value="">Nessun Brand Attivo</option>
                 {brands.map(brand => (
@@ -53,10 +53,10 @@ const BrandHubSelector: React.FC<{
 const NavItem: React.FC<NavItemProps> = ({ view, label, icon, currentView, setCurrentView }) => (
   <button
     onClick={() => setCurrentView(view)}
-    className={`flex items-center w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
+    className={`flex items-center w-full px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out border-l-4 ${
       currentView === view
-        ? 'bg-blue-600 text-white'
-        : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+        ? 'bg-blue-600/20 text-white border-blue-500'
+        : 'text-gray-400 hover:bg-gray-700 hover:text-white border-transparent'
     }`}
   >
     {icon}

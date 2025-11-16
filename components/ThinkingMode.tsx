@@ -224,7 +224,7 @@ export const ThinkingMode: React.FC = () => {
                             }
                         }}
                     />
-                     <button onClick={handleSend} disabled={loading || (!inputText.trim() && attachments.length === 0 && !recordedAudio)} className="p-3 text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed">
+                     <button onClick={handleSend} disabled={loading || (!inputText.trim() && attachments.length === 0 && !recordedAudio)} className="p-2.5 text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors">
                         <SendIcon className="w-6 h-6"/>
                     </button>
                 </div>

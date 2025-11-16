@@ -84,7 +84,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ setImageForMocku
                     <textarea
                         id="gen-prompt"
                         rows={4}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        className="custom-textarea w-full p-3"
                         placeholder="e.g., 'A modern login screen for a fitness app'"
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
@@ -94,7 +94,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ setImageForMocku
                     <label htmlFor="aspect-ratio" className="block text-sm font-medium text-gray-300 mb-2">Aspect Ratio</label>
                     <select
                         id="aspect-ratio"
-                        className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="custom-select custom-input w-full p-3"
                         value={aspectRatio}
                         onChange={(e) => setAspectRatio(e.target.value)}
                     >
@@ -107,7 +107,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ setImageForMocku
                      <button
                         onClick={handleSubmit}
                         disabled={loading || !prompt}
-                        className="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                        className="btn btn-primary"
                     >
                         {loading ? <Spinner /> : 'Generate Image'}
                     </button>
@@ -131,13 +131,13 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ setImageForMocku
                          <button
                             onClick={handleGenerateCode}
                             disabled={loadingCode}
-                            className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
+                            className="btn bg-green-600 hover:bg-green-700 disabled:bg-gray-500"
                         >
                             {loadingCode ? <Spinner /> : 'Generate Code'}
                         </button>
                          <button
                             onClick={handleUseForMockup}
-                            className="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
+                            className="btn bg-purple-600 hover:bg-purple-700"
                         >
                             Use for Mockup
                         </button>

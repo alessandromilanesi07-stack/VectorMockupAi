@@ -44,7 +44,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setIm
     const brandColors = useMemo(() => {
         if (!activeBrand) return [];
         const { primary, secondary, accent, neutral } = activeBrand.kit.colors;
-        return [primary, secondary, accent, neutral].filter(Boolean);
+        return [primary, secondary, accent, neutral].filter((c): c is string => !!c);
     }, [activeBrand]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,7 +119,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setIm
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">Background Color</label>
                                 <div className="flex items-center gap-2">
-                                    <input type="color" value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)} className="w-12 h-12 p-1 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer" />
+                                     <div className="relative w-12 h-12">
+                                        <div className="custom-color-picker-wrapper w-12 h-12">
+                                            <div className="color-swatch" style={{ backgroundColor: backgroundColor }}></div>
+                                            <input type="color" value={backgroundColor} onChange={e => setBackgroundColor(e.target.value)} />
+                                        </div>
+                                    </div>
                                     <div className="flex items-center gap-2">
                                         {brandColors.map((color, index) => (
                                             <button
@@ -137,7 +142,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setIm
                                 <label className="block text-sm font-medium text-gray-300 mb-2">Aspect Ratio</label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {['original', '1:1', '4:5', '9:16'].map(ratio => (
-                                        <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`p-2 rounded-md text-sm ${aspectRatio === ratio ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                        <button key={ratio} onClick={() => setAspectRatio(ratio)} className={`p-2 rounded-md text-sm transition-colors ${aspectRatio === ratio ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
                                             {ratio === 'original' ? 'Original' : ratio}
                                             {ratio === '1:1' && <span className="block text-xs text-gray-400">Post</span>}
                                             {ratio === '4:5' && <span className="block text-xs text-gray-400">Portrait</span>}
@@ -151,7 +156,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageForEditing, setIm
                          <button
                             onClick={handleSubmit}
                             disabled={loading || !imageFile}
-                            className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 mt-4"
+                            className="w-full btn btn-primary mt-4"
                         >
                             {loading ? <Spinner /> : 'Generate Post'}
                         </button>

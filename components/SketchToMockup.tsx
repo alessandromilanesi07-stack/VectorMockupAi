@@ -83,7 +83,7 @@ export const SketchToMockup: React.FC = () => {
                                 <textarea
                                     id="sketch-prompt"
                                     rows={5}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="custom-textarea w-full p-3"
                                     placeholder="e.g., 'Make it a dark mode theme for a music app'"
                                     value={prompt}
                                     onChange={(e) => setPrompt(e.target.value)}
@@ -92,7 +92,7 @@ export const SketchToMockup: React.FC = () => {
                              <button
                                 onClick={handleSubmit}
                                 disabled={loading || !sketchFile}
-                                className="w-full inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                                className="w-full btn btn-primary"
                             >
                                 {loading ? <Spinner /> : 'Generate Mockup'}
                             </button>
@@ -117,7 +117,7 @@ export const SketchToMockup: React.FC = () => {
                             <div className="text-center pt-4 border-t border-gray-700">
                                 <button
                                     onClick={handleReset}
-                                    className="inline-flex items-center justify-center gap-2 px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                                    className="btn bg-green-600 hover:bg-green-700"
                                 >
                                     <PlusIcon />
                                     Create Another Mockup

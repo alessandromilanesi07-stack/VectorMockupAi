@@ -41,7 +41,7 @@ export const Search: React.FC = () => {
                 <div className="relative">
                     <input
                         type="text"
-                        className="w-full bg-gray-700 border border-gray-600 rounded-full py-3 pl-5 pr-24 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="custom-input w-full rounded-full py-3 pl-5 pr-28"
                         placeholder="Ask anything..."
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
@@ -50,7 +50,7 @@ export const Search: React.FC = () => {
                     <button
                         onClick={handleSubmit}
                         disabled={loading || !prompt}
-                        className="absolute inset-y-0 right-0 flex items-center justify-center px-6 my-1.5 mr-1.5 text-sm font-medium rounded-full text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500"
+                        className="absolute inset-y-0 right-0 my-1.5 mr-1.5 btn btn-primary !rounded-full !px-6"
                     >
                         {loading ? <Spinner /> : 'Search'}
                     </button>

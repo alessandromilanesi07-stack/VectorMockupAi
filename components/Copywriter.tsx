@@ -89,7 +89,7 @@ export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand, setCopyForT
                         <input
                             id="product-name"
                             type="text"
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500"
+                            className="custom-input w-full p-3"
                             placeholder="e.g., 'The Voyager Hoodie'"
                             value={productName}
                             onChange={(e) => setProductName(e.target.value)}
@@ -100,7 +100,7 @@ export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand, setCopyForT
                         <textarea
                             id="tone-of-voice"
                             rows={3}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500"
+                            className="custom-textarea w-full p-3"
                             placeholder="e.g., 'Minimal and luxurious', 'Bold and energetic'"
                             value={toneOfVoice}
                             onChange={(e) => setToneOfVoice(e.target.value)}
@@ -110,7 +110,7 @@ export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand, setCopyForT
                         <button
                             onClick={handleSubmit}
                             disabled={loading || !imageFile || !productName || !toneOfVoice}
-                            className="w-full inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                            className="w-full btn btn-primary"
                         >
                             {loading ? <Spinner /> : 'Generate Copy'}
                         </button>
@@ -149,7 +149,7 @@ export const Copywriter: React.FC<CopywriterProps> = ({ activeBrand, setCopyForT
                              <div className="border-t border-gray-700 pt-4 text-center">
                                 <button
                                     onClick={handleUseForTechPack}
-                                    className="inline-flex items-center justify-center px-6 py-2 text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700"
+                                    className="btn bg-teal-600 hover:bg-teal-700 text-sm"
                                 >
                                     Usa Testo per Scheda Tecnica
                                 </button>

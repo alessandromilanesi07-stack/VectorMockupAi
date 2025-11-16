@@ -122,8 +122,8 @@ const GenerationPanel: React.FC<{
         <div className="bg-gray-800 p-4 rounded-xl flex flex-col h-full">
             <h3 className="text-lg font-bold text-white mb-3 text-center">{title}</h3>
             <div className="flex justify-center mb-3 bg-gray-900 rounded-lg p-1">
-                <button onClick={() => setSource('generate')} className={`px-4 py-1 text-sm rounded-md ${source === 'generate' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Generate AI</button>
-                <button onClick={() => setSource('upload')} className={`px-4 py-1 text-sm rounded-md ${source === 'upload' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Upload</button>
+                <button onClick={() => setSource('generate')} className={`px-4 py-1 text-sm rounded-md transition-colors ${source === 'generate' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Generate AI</button>
+                <button onClick={() => setSource('upload')} className={`px-4 py-1 text-sm rounded-md transition-colors ${source === 'upload' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Upload</button>
             </div>
             
             <div className="w-full aspect-square bg-gray-900 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden mb-3">
@@ -164,7 +164,7 @@ const GenerationPanel: React.FC<{
                                     <button 
                                         key={cat} 
                                         onClick={() => setSelectedCategory?.(cat)}
-                                        className={`flex-1 px-2 py-1 text-xs rounded-md ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+                                        className={`flex-1 px-2 py-1 text-xs rounded-md transition-colors ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                                     >{cat}</button>
                                 ))}
                             </div>
@@ -192,7 +192,7 @@ const GenerationPanel: React.FC<{
                                                <button 
                                                     key={opt.id}
                                                     onClick={() => setMockupCustomization?.(cust.id, opt.id)}
-                                                    className={`flex-1 px-2 py-1 text-xs rounded-md ${mockupCustomizations?.[cust.id] === opt.id ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+                                                    className={`flex-1 px-2 py-1 text-xs rounded-md transition-colors ${mockupCustomizations?.[cust.id] === opt.id ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
                                                >{opt.name}</button>
                                            ))}
                                        </div>
@@ -200,19 +200,22 @@ const GenerationPanel: React.FC<{
                                ))}
                                 <div>
                                     <label className="text-xs font-bold text-gray-300">Colore</label>
-                                    <input type="color" value={mockupColor} onChange={(e) => setMockupColor?.(e.target.value)} className="w-full h-8 mt-1 bg-gray-700 border border-gray-600 rounded-lg p-1 cursor-pointer"/>
+                                     <div className="custom-color-picker-wrapper mt-1">
+                                        <div className="color-swatch" style={{ backgroundColor: mockupColor }}></div>
+                                        <input type="color" value={mockupColor} onChange={(e) => setMockupColor?.(e.target.value)} />
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="mt-auto flex flex-col gap-2">
-                                <button onClick={onGenerate} disabled={isLoading || !selectedProduct} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
+                                <button onClick={onGenerate} disabled={isLoading || !selectedProduct} className="btn btn-secondary w-full">
                                     {isLoading ? <Spinner /> : <><WandIcon /> Genera Mockup</>}
                                 </button>
                                 {onDownloadBlank && (
                                     <button 
                                         onClick={onDownloadBlank} 
                                         disabled={!generatedImages} 
-                                        className="w-full flex items-center justify-center gap-2 p-2 text-xs font-bold bg-gray-600 hover:bg-gray-500 rounded-lg disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                        className="w-full flex items-center justify-center gap-2 p-2 text-xs font-bold bg-gray-600 hover:bg-gray-500 rounded-lg disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
                                     >
                                         <DownloadIcon className="w-4 h-4" /> Download Mockup
                                     </button>
@@ -225,14 +228,14 @@ const GenerationPanel: React.FC<{
                                 value={prompt}
                                 onChange={(e) => setPrompt?.(e.target.value)}
                                 placeholder={`e.g., roaring tiger logo, line art`}
-                                className="w-full h-24 bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white mb-2 flex-grow"
+                                className="custom-textarea w-full h-24 p-2 text-sm mb-2 flex-grow"
                                 disabled={anyDesignLoading}
                             />
                             <div className="flex flex-col gap-2">
-                                <button onClick={onGenerate} disabled={anyDesignLoading || !prompt} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-600">
+                                <button onClick={onGenerate} disabled={anyDesignLoading || !prompt} className="btn btn-primary w-full">
                                     {isLoading ? <Spinner /> : <><EditIcon className="w-5 h-5" /> Generate from Prompt</>}
                                 </button>
-                                <button onClick={onGenerateIdea} disabled={anyDesignLoading} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
+                                <button onClick={onGenerateIdea} disabled={anyDesignLoading} className="btn btn-secondary w-full">
                                     {isGeneratingIdea ? <Spinner /> : <><WandIcon /> Generate with AI</>}
                                 </button>
                             </div>
@@ -488,7 +491,7 @@ export const MockupStudio: React.FC = () => {
     return (
         <div className="w-full max-w-7xl mx-auto space-y-6 bg-gray-900/50 p-6 rounded-xl shadow-2xl border border-gray-700">
             <div className="text-center">
-                <h2 className="text-3xl font-extrabold text-white sm:text-4xl">VectorMockupAi</h2>
+                <h2 className="text-3xl font-extrabold text-white sm:text-4xl tracking-tight">VectorMockupAi</h2>
                 <p className="mt-2 text-gray-400">Generate both your mockup and your design from text, or upload your own.</p>
             </div>
 
@@ -578,7 +581,7 @@ export const MockupStudio: React.FC = () => {
                                 value={viewForApplication}
                                 onChange={(e) => setViewForApplication(e.target.value as MockupView)}
                                 disabled={!hasMockup || !!mockupFile}
-                                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                className="custom-select custom-input w-full p-3 text-sm"
                             >
                                 {mockupFile ? (
                                     <option value="frontal">{viewDisplayNames.frontal}</option>
@@ -615,7 +618,7 @@ export const MockupStudio: React.FC = () => {
                                 value={placement}
                                 onChange={(e) => setPlacement(e.target.value)}
                                 disabled={!hasMockup || availablePlacements.length === 0}
-                                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                className="custom-select custom-input w-full p-3 text-sm"
                             >
                                 {availablePlacements.length > 0 ? (
                                     availablePlacements.map(p => <option key={p} value={p}>{p}</option>)
@@ -644,12 +647,12 @@ export const MockupStudio: React.FC = () => {
                                             value={feedbackText}
                                             onChange={(e) => setFeedbackText(e.target.value)}
                                             placeholder="Cosa possiamo migliorare? (es. logo più grande, ricamo più scuro)"
-                                            className="w-full h-20 bg-gray-700 border border-gray-600 rounded-lg p-2 text-sm text-white"
+                                            className="custom-textarea w-full h-20 p-2 text-sm"
                                         />
                                         <button
                                             onClick={() => handleApplyDesign(feedbackText)}
                                             disabled={!feedbackText || isApplyingDesign}
-                                            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600"
+                                            className="btn btn-secondary w-full"
                                         >
                                             <RefreshIcon className="w-5 h-5" /> Rigenera con Feedback
                                         </button>
@@ -658,7 +661,7 @@ export const MockupStudio: React.FC = () => {
                                 
                                 <button
                                     onClick={handleDownload}
-                                    className="w-full mt-2 inline-flex items-center justify-center gap-2 px-6 py-3 text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                                    className="w-full mt-2 btn bg-green-600 hover:bg-green-700 transition-colors"
                                 >
                                     <DownloadIcon /> Download
                                 </button>
@@ -667,7 +670,7 @@ export const MockupStudio: React.FC = () => {
                             <button
                                 onClick={() => handleApplyDesign()}
                                 disabled={!canApply}
-                                className="w-full inline-flex items-center justify-center px-6 py-4 text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+                                className="btn btn-primary w-full py-4"
                             >
                                 {isApplyingDesign ? <Spinner /> : 'Apply Design'}
                             </button>
