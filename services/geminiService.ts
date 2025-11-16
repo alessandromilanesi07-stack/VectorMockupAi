@@ -1,6 +1,4 @@
-// FIX: Add Type to imports for JSON schema functionality.
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-// FIX: Import all necessary types.
 import type { ApplicationType, BrandKitData, GroundingChunk, MarketingCopy, MockupProduct, MockupView } from '../types';
 
 if (!process.env.API_KEY) {
@@ -159,7 +157,15 @@ export const generateDesignPrompt = async (productName: string): Promise<string>
 };
 
 export const generateVectorGraphic = async (prompt: string): Promise<string> => {
-    const fullPrompt = `A clean, modern, vector logo of a ${prompt}. The design must be simple, bold, and easily scalable. Crucially, the background MUST be transparent. Do not add any text, words, or letters unless explicitly requested in the prompt.`;
+    const fullPrompt = `Create a vector graphic logo based on the theme: "${prompt}".
+
+**ABSOLUTE NON-NEGOTIABLE RULES:**
+1.  **OUTPUT FORMAT:** The output must be a single, isolated graphic object on a **completely transparent background**.
+2.  **STYLE:** The style must be a clean, flat, 2D vector illustration. Think modern logo, not a picture. Use solid colors and bold lines.
+3.  **NO REALISM:** Do **NOT** generate photographs, realistic images, 3D renders, or anything that looks like a photo.
+4.  **NO BACKGROUNDS:** Do **NOT** include any backgrounds, scenes, environments, textures, or colors behind the main graphic object. The background must be transparent.
+5.  **NO HUMANS OR TEXT:** Do **NOT** include any people, human figures, text, letters, or numbers unless the original prompt explicitly asks for them.
+6.  **SIMPLE & BOLD:** The final graphic must be simple, bold, and easily recognizable, suitable for printing on apparel.`;
     
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
@@ -296,7 +302,6 @@ export const applyVectorToMockup = async (
     throw new Error("Failed to generate a valid mockup after multiple attempts. Please try a different design or adjust custom instructions.");
 };
 
-// FIX: Implement and export all missing functions and types.
 
 export type MultimodalContent = (string | File)[];
 
@@ -316,26 +321,25 @@ export const sketchToMockup = async (sketchFile: File, prompt: string): Promise<
     if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
         return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
     }
-    throw new Error("Failed to generate mockup from sketch.");
+    throw new Error("Failed to generate a mockup from the sketch.");
 };
 
 export const editImage = async (imageFile: File, prompt: string): Promise<string> => {
     const imagePart = await fileToGenerativePart(imageFile);
-    const textPart = { text: prompt };
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [imagePart, textPart] },
+        contents: { parts: [imagePart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE],
         },
     });
-
+    
     const firstPart = response.candidates?.[0]?.content?.parts?.[0];
     if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
         return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
     }
-    throw new Error("Failed to edit image.");
+    throw new Error("Failed to edit the image.");
 };
 
 export const generateImage = async (prompt: string, aspectRatio: string): Promise<string[]> => {
@@ -344,44 +348,28 @@ export const generateImage = async (prompt: string, aspectRatio: string): Promis
         prompt,
         config: {
             numberOfImages: 1,
-            aspectRatio,
-            outputMimeType: 'image/png',
+            aspectRatio: aspectRatio as any,
         },
     });
 
     return response.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
 };
 
-export const generateCodeForImage = async (prompt: string, base64Data: string, mimeType: string): Promise<string> => {
-    const imagePart = {
-        inlineData: {
-            data: base64Data,
-            mimeType,
-        },
-    };
-    const userPrompt = `Based on the following user prompt and image, generate the corresponding HTML and CSS code. 
-    User prompt: "${prompt}"
-    
-    Provide only the code, enclosed in a single markdown block.
-    `;
-    const textPart = { text: userPrompt };
+export const generateCodeForImage = async (prompt: string, imageBase64: string, mimeType: string): Promise<string> => {
+    const imagePart = { inlineData: { data: imageBase64, mimeType } };
+    const promptPart = { text: `Generate clean, responsive HTML and Tailwind CSS code for this UI design: ${prompt}. Do not include any explanations, just the code.` };
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
-        contents: { parts: [imagePart, textPart] },
+        contents: { parts: [promptPart, imagePart] },
     });
-    
-    // Extract code from markdown block
-    const codeBlockRegex = /```(html|css|javascript)?\n([\s\S]*?)```/g;
-    const matches = [...response.text.matchAll(codeBlockRegex)];
-    if (matches.length > 0) {
-        return matches.map(match => match[2]).join('\n\n');
-    }
-    return response.text;
+
+    // Clean up markdown code block fences
+    return response.text.replace(/```(html|css)?/g, '').trim();
 };
 
 export const generateWithThinking = async (content: MultimodalContent): Promise<string> => {
-    const parts = await Promise.all(content.map(item => {
+    const parts = await Promise.all(content.map(async item => {
         if (typeof item === 'string') {
             return { text: item };
         }
@@ -392,13 +380,13 @@ export const generateWithThinking = async (content: MultimodalContent): Promise<
         model: 'gemini-2.5-pro',
         contents: { parts },
         config: {
-            thinkingConfig: { thinkingBudget: 8192 }, // Use thinking for complex queries
-        }
+            thinkingConfig: { thinkingBudget: 32768 },
+            systemInstruction: `You are VectorCraft AI's assistant. You have deep knowledge of all app features. Be helpful, strategic, and concise.`,
+        },
     });
 
     return response.text;
 };
-
 
 export const searchWithGrounding = async (prompt: string): Promise<{ text: string; sources: GroundingChunk[] }> => {
     const response = await ai.models.generateContent({
@@ -414,88 +402,57 @@ export const searchWithGrounding = async (prompt: string): Promise<{ text: strin
 };
 
 export const generateTrendReport = async (topic: string): Promise<string> => {
-    const prompt = `As an expert trend forecaster, analyze real-time data for the topic: "${topic}".
-    Provide a detailed report covering:
-    1.  **Key Themes & Aesthetics:** What are the dominant visual and conceptual trends?
-    2.  **Color Palettes:** Identify 3-5 key colors with hex codes.
-    3.  **Key Garments & Silhouettes:** What specific apparel items are trending?
-    4.  **Overall Summary:** A brief conclusion of the findings.
-    
-    Format the output in clean, readable markdown.`;
+    const prompt = `As a senior trend forecaster for a modern apparel brand, generate a detailed report on the topic: "${topic}". Use Google Search to find the latest information.
 
+    The report should be structured with the following sections:
+    1.  **Key Themes & Concepts:** High-level overview of the main ideas.
+    2.  **Color Palette:** A list of 5-7 key colors with hex codes and descriptions.
+    3.  **Key Garments & Silhouettes:** Specific apparel items that are trending.
+    4.  **Graphics & Prints:** The dominant styles for graphics.
+    
+    Format the output using clear headings and bullet points.`;
+    
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-pro',
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
-            temperature: 0.2,
+            temperature: 0.5,
         },
     });
-
+    
     return response.text;
 };
 
-export const generateMarketingCopy = async (imageFile: File, productName: string, toneOfVoice: string): Promise<MarketingCopy> => {
-    const imagePart = await fileToGenerativePart(imageFile);
-    const prompt = `Analyze the product image. Generate marketing copy for a product named "${productName}". The brand's tone of voice is: "${toneOfVoice}". 
-    Provide the following fields in your JSON response: productDescription, instagramCaption, and emailSubject.`;
-
-    const textPart = { text: prompt };
-
+export const extractBrandKit = async (url: string): Promise<BrandKitData> => {
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, textPart] },
+        model: "gemini-2.5-flash",
+        contents: `Analyze the visual identity of the website at this URL: ${url}. Extract its brand kit.`,
         config: {
             responseMimeType: "application/json",
             responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                    productDescription: { type: Type.STRING },
-                    instagramCaption: { type: Type.STRING },
-                    emailSubject: { type: Type.STRING },
+                    colors: {
+                        type: Type.OBJECT,
+                        properties: {
+                            primary: { type: Type.STRING },
+                            secondary: { type: Type.STRING },
+                            accent: { type: Type.STRING },
+                            neutral: { type: Type.STRING },
+                        },
+                    },
+                    fonts: {
+                        type: Type.OBJECT,
+                        properties: {
+                            heading: { type: Type.STRING },
+                            body: { type: Type.STRING },
+                        },
+                    },
+                    logoDescription: { type: Type.STRING },
+                    toneOfVoice: { type: Type.STRING },
                 },
-                required: ['productDescription', 'instagramCaption', 'emailSubject'],
             },
-        },
-    });
-
-    return JSON.parse(response.text);
-};
-
-const brandKitSchema = {
-    type: Type.OBJECT,
-    properties: {
-        colors: {
-            type: Type.OBJECT,
-            properties: {
-                primary: { type: Type.STRING, description: 'Primary brand color hex code (e.g., #FFFFFF).' },
-                secondary: { type: Type.STRING, description: 'Secondary brand color hex code.' },
-                accent: { type: Type.STRING, description: 'Accent brand color hex code.' },
-                neutral: { type: Type.STRING, description: 'Neutral/background brand color hex code.' },
-            },
-        },
-        fonts: {
-            type: Type.OBJECT,
-            properties: {
-                heading: { type: Type.STRING, description: 'Name of the primary heading font.' },
-                body: { type: Type.STRING, description: 'Name of the primary body text font.' },
-            },
-        },
-        logoDescription: { type: Type.STRING, description: 'A brief, one-sentence description of the logo\'s style.' },
-        toneOfVoice: { type: Type.STRING, description: '3-5 keywords describing the brand\'s tone of voice (e.g., "minimal, luxurious, modern").' },
-    },
-};
-
-export const extractBrandKit = async (url: string): Promise<BrandKitData> => {
-    const prompt = `Analyze the content of the website at ${url}. Extract the brand kit information.`;
-    
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-            tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json",
-            responseSchema: brandKitSchema,
         },
     });
 
@@ -504,15 +461,60 @@ export const extractBrandKit = async (url: string): Promise<BrandKitData> => {
 
 export const extractBrandKitFromImage = async (imageFile: File): Promise<BrandKitData> => {
     const imagePart = await fileToGenerativePart(imageFile);
-    const prompt = `Analyze this logo image and extract the brand kit information.`;
-    const textPart = { text: prompt };
-
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, textPart] },
+        model: "gemini-2.5-flash",
+        contents: { parts: [
+            imagePart, 
+            { text: "This image is a company logo. Analyze its visual identity and extract a brand kit based on it." }
+        ]},
         config: {
             responseMimeType: "application/json",
-            responseSchema: brandKitSchema,
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    colors: {
+                        type: Type.OBJECT,
+                        properties: {
+                            primary: { type: Type.STRING },
+                            secondary: { type: Type.STRING },
+                            accent: { type: Type.STRING },
+                            neutral: { type: Type.STRING },
+                        },
+                    },
+                    fonts: {
+                        type: Type.OBJECT,
+                        properties: {
+                            heading: { type: Type.STRING },
+                            body: { type: Type.STRING },
+                        },
+                    },
+                    logoDescription: { type: Type.STRING },
+                    toneOfVoice: { type: Type.STRING },
+                },
+            },
+        },
+    });
+    return JSON.parse(response.text);
+};
+
+export const generateMarketingCopy = async (imageFile: File, productName: string, toneOfVoice: string): Promise<MarketingCopy> => {
+    const imagePart = await fileToGenerativePart(imageFile);
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: { parts: [
+            imagePart,
+            { text: `Generate marketing copy for a product named "${productName}". The brand's tone of voice is "${toneOfVoice}".` }
+        ]},
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    productDescription: { type: Type.STRING },
+                    instagramCaption: { type: Type.STRING },
+                    emailSubject: { type: Type.STRING },
+                },
+            },
         },
     });
 

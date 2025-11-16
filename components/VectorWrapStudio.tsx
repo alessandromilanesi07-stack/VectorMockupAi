@@ -104,10 +104,11 @@ const GenerationPanel: React.FC<{
     setMockupCustomization?: (customizationId: string, optionId: string) => void;
     onGenerateIdea?: () => void;
     isGeneratingIdea?: boolean;
+    onDownloadBlank?: () => void;
 }> = ({ 
     title, prompt, setPrompt, onGenerate, isLoading, generatedImage, generatedImages, selectedMockupView, setSelectedMockupView, uploadedFile, source, setSource, onFileSelect, maxSizeMB,
     isMockupPanel, selectedCategory, setSelectedCategory, selectedProduct, setSelectedProduct, mockupColor, setMockupColor, mockupCustomizations, setMockupCustomization,
-    onGenerateIdea, isGeneratingIdea
+    onGenerateIdea, isGeneratingIdea, onDownloadBlank
 }) => {
     const displayImage = isMockupPanel 
         ? (uploadedFile ? URL.createObjectURL(uploadedFile) : (generatedImages && selectedMockupView ? generatedImages[selectedMockupView] : null))
@@ -203,9 +204,20 @@ const GenerationPanel: React.FC<{
                                 </div>
                             </div>
 
-                            <button onClick={onGenerate} disabled={isLoading || !selectedProduct} className="w-full mt-auto flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
-                                {isLoading ? <Spinner /> : <><WandIcon /> Genera Mockup</>}
-                            </button>
+                            <div className="mt-auto flex flex-col gap-2">
+                                <button onClick={onGenerate} disabled={isLoading || !selectedProduct} className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold bg-purple-600 hover:bg-purple-700 rounded-lg disabled:bg-gray-600">
+                                    {isLoading ? <Spinner /> : <><WandIcon /> Genera Mockup</>}
+                                </button>
+                                {onDownloadBlank && (
+                                    <button 
+                                        onClick={onDownloadBlank} 
+                                        disabled={!generatedImages} 
+                                        className="w-full flex items-center justify-center gap-2 p-2 text-xs font-bold bg-gray-600 hover:bg-gray-500 rounded-lg disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                    >
+                                        <DownloadIcon className="w-4 h-4" /> Download Mockup
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <>
@@ -359,6 +371,16 @@ export const MockupStudio: React.FC = () => {
         }
     }, [selectedProduct, mockupColor, mockupCustomizations]);
 
+    const handleDownloadMockup = useCallback(() => {
+        if (generatedMockups && selectedMockupView) {
+            const imageToDownload = generatedMockups[selectedMockupView];
+            const product = selectedProduct?.name.replace(/\s+/g, '-') || 'product';
+            const view = selectedMockupView;
+            saveAs(imageToDownload, `blank-mockup-${product}-${view}.png`);
+            trackEvent('blank_mockup_downloaded', { view: selectedMockupView, product: selectedProduct?.name });
+        }
+    }, [generatedMockups, selectedMockupView, selectedProduct]);
+
     const handleGenerateDesign = useCallback(async () => {
         setIsGeneratingDesign(true);
         setError(null);
@@ -493,6 +515,7 @@ export const MockupStudio: React.FC = () => {
                     setMockupColor={setMockupColor}
                     mockupCustomizations={mockupCustomizations}
                     setMockupCustomization={handleSetCustomization}
+                    onDownloadBlank={handleDownloadMockup}
                 />
 
                 {/* Design Panel */}
