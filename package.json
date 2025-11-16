@@ -1,5 +1,5 @@
 {
-  "name": "vectorcraft-ai",
+  "name": "tech-pack-builder-ai",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,8 @@
     "react": "^19.2.0",
     "@google/genai": "^1.29.0",
     "fabric": "^5.3.0",
-    "file-saver": "^2.0.5"
+    "file-saver": "^2.0.5",
+    "immer": "^10.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

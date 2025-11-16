@@ -1,332 +1,130 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import type { ApplicationType, BrandKitData, GroundingChunk, MarketingCopy, MockupProduct, MockupView } from '../types';
+import type { BaseConstruction, BrandKitData, GroundingChunk, MarketingCopy, MockupView } from '../types';
 
 if (!process.env.API_KEY) {
   throw new Error("API_KEY environment variable is not set");
 }
-
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const fileToGenerativePart = (file: File) => {
-  return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
-    // SECURITY & PERFORMANCE WARNING: This client-side processing is not suitable for production.
-    // Large files can crash the browser. In a real application, this should be replaced
-    // with a secure backend endpoint that generates a signed URL for cloud storage upload.
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        return reject(new Error("Failed to read file as base64 string"));
-      }
-      const base64Data = reader.result.split(',')[1];
-      resolve({
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type,
-        },
-      });
-    };
-    reader.onerror = (error) => reject(error);
-    reader.readAsDataURL(file);
-  });
-};
-
-const base64ToGenerativePart = (base64Data: string) => {
-    const match = base64Data.match(/^data:(image\/\w+);base64,(.*)$/);
-    if (!match) {
-        // Fallback for non-data-URL base64 strings, assuming png
-        return {
-            inlineData: {
-                data: base64Data,
-                mimeType: 'image/png',
-            },
-        };
-    }
-    const mimeType = match[1];
-    const data = match[2];
+// FIX: Add helper function to convert File to GenerativePart for multimodal prompts.
+const fileToGenerativePart = async (file: File) => {
+    const base64EncodedData = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(file);
+    });
     return {
         inlineData: {
-            data,
-            mimeType,
+            data: base64EncodedData,
+            mimeType: file.type,
         },
     };
 };
 
+// FIX: Export MultimodalContent type.
+export type MultimodalContent = (string | File)[];
 
-const viewPrompts: Record<MockupView, string> = {
-    frontal: 'front-facing view',
-    retro: 'rear view, showing the back of the garment',
-};
+// FIX: Implement and export missing service functions.
+export const applyVectorToMockup = async (
+    mockupImage: File,
+    designImage: File,
+    applicationType: string,
+    placement: string,
+    setStatusMessage: (message: string) => void,
+    feedback?: string
+): Promise<string> => {
+    setStatusMessage("Preparing images for AI...");
+    const mockupPart = await fileToGenerativePart(mockupImage);
+    const designPart = await fileToGenerativePart(designImage);
 
-export const generateMockupViews = async (basePrompt: string, category: MockupProduct['category']): Promise<Record<MockupView, string>> => {
-    // 1. Generate the front view first to use as a reference.
-    const frontalPrompt = `Generate a technical flat vector illustration for a clothing tech pack. The specific view to generate is the **front-facing view**. The product is a ${basePrompt}.
+    let prompt = `You are a professional apparel mockup generator.
+    Your task is to apply the provided design onto the blank mockup image with extreme photorealism.
+    - Application Type: ${applicationType}. If 'Embroidery', give the design a realistic stitched texture. If 'Print', make it look like a high-quality screen print.
+    - Placement: ${placement}. Accurately place the design on this area of the garment.
+    - Realism: The final image must look like a real photo. Pay attention to fabric texture, wrinkles, shadows, and lighting. The applied design must conform to the garment's shape.
+    - Output: Return ONLY the final image. Do not include the original mockup or design in the output.`;
+    
+    if (feedback) {
+        prompt += `\n\nUSER FEEDBACK FOR REVISION: "${feedback}". Please adjust the previous result based on this feedback.`;
+    }
 
-**CRITICAL RULES FOR STYLE:**
-1.  The style must be a clean, flat vector illustration with a crisp black outline on all edges and seams. It should look like a technical drawing, not a photograph.
-2.  Include basic seam lines (e.g., on the collar, hem, sleeves) but avoid any photorealistic shading, shadows, or complex fabric textures.
-3.  The garment must be perfectly centered, clean, and wrinkle-free on a solid, neutral gray background (#cccccc).
-4.  **Sleeve Position:** If the garment has sleeves, they must be perfectly straight and spread out wide to the sides, creating a T-shape. If it is sleeveless, do not add sleeves.`;
-
-    const frontalResponse = await ai.models.generateContent({
+    setStatusMessage("Applying design with Gemini...");
+    const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: frontalPrompt }] },
+        contents: { parts: [mockupPart, designPart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE],
-            temperature: 0.1,
         },
     });
 
-    const frontalPart = frontalResponse.candidates?.[0]?.content?.parts?.[0];
-    if (!frontalPart || !('inlineData' in frontalPart) || !frontalPart.inlineData) {
-        throw new Error(`Failed to generate the frontal mockup from the prompt.`);
+    setStatusMessage("Finalizing image...");
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            const base64ImageBytes: string = part.inlineData.data;
+            return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+        }
     }
-    
-    const frontalImageBase64 = `data:${frontalPart.inlineData.mimeType};base64,${frontalPart.inlineData.data}`;
-    const referenceImagePart = base64ToGenerativePart(frontalImageBase64);
-
-    // 2. Generate the other views using the front view as a reference.
-    const otherViews: MockupView[] = ['retro'];
-    
-    const generationPromises = otherViews.map(async (view) => {
-        let viewSpecificPrompt = `You will be given a reference image of the **front view** of a garment. Your task is to generate another technical flat vector illustration for the same garment, but for a different view: the **${viewPrompts[view]}**.
-
-**CRITICAL RULES FOR CONSISTENCY AND STYLE:**
-1.  **ABSOLUTE DIMENSIONAL ACCURACY:** This is the most important rule. The generated view MUST be dimensionally identical to the reference image. Replicate the exact length, width, and proportions of every part of the garment (body, collar, and especially the sleeves). The overall scale and size must not change.
-2.  **SLEEVELESS GARMENTS:** If the reference image shows a sleeveless garment (like a vest or tank top), the generated view MUST also be sleeveless. Do not add sleeves under any circumstances.
-3.  **BACKGROUND:** The background MUST be the same solid, neutral gray (#cccccc) as the reference image.
-4.  **CLEAN VECTOR STYLE:** Maintain the clean, flat vector style with crisp black outlines. No photorealistic shading or complex textures.`;
-
-        const topsCategories: MockupProduct['category'][] = ['Tops', 'Felpe', 'Outerwear'];
-        if (topsCategories.includes(category)) {
-            if (view === 'retro') {
-                 viewSpecificPrompt += `
-5. **Sleeve Position and Length for Back View:** If the garment has sleeves, they must be perfectly straight and spread out wide to the sides, creating a T-shape. This back view must be a perfect mirror of the front view's silhouette and dimensions.`;
-            }
-        }
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: { parts: [
-                { text: viewSpecificPrompt },
-                referenceImagePart // Provide the front view as context
-            ] },
-            config: {
-                responseModalities: [Modality.IMAGE],
-                temperature: 0.1,
-            },
-        });
-
-        const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-        if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-            return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
-        }
-        throw new Error(`Failed to generate the ${view} mockup from the prompt.`);
-    });
-
-    const otherResults = await Promise.all(generationPromises);
-    
-    const finalViews: Record<MockupView, string> = {
-        frontal: frontalImageBase64,
-        retro: otherResults[0],
-    };
-
-    return finalViews;
+    throw new Error("AI did not return an image.");
 };
 
-export const generateDesignPrompt = async (productName: string): Promise<string> => {
-    const prompt = `You are a creative director for a modern streetwear brand. Generate a short, creative prompt for a vector graphic to be printed on a "${productName}".
-    The style must be modern, trendy, and suitable for a vector logo. It should be simple, bold, and easily scalable.
-    The output should be on a transparent background.
-    Example Prompts:
-    - a minimalist roaring tiger logo, line art style
-    - a stylized phoenix rising from ashes, geometric vector art
-    - a simple wave icon in a circle, Japanese art style
-    - a retro-inspired astronaut helmet with a floral pattern
-    
-    Provide ONLY the prompt text itself, with no introductory phrases like "Here is a prompt:".`;
+export const generateMockupViews = async (prompt: string, category: string): Promise<Record<MockupView, string>> => {
+    const views: MockupView[] = ['frontal', 'retro'];
+    const results: Partial<Record<MockupView, string>> = {};
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-            temperature: 0.9,
-        }
-    });
+    for (const view of views) {
+        const viewPrompt = `Photorealistic studio shot of a blank ${prompt}, ${view} view, on a solid neutral grey background. professional apparel photography, clean, no shadows, ready for mockup.`;
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: viewPrompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+                aspectRatio: '1:1',
+            }
+        });
+        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+        results[view] = `data:image/png;base64,${base64ImageBytes}`;
+    }
 
-    return response.text.trim();
+    if (Object.keys(results).length !== views.length) {
+        throw new Error("Failed to generate all required mockup views.");
+    }
+
+    return results as Record<MockupView, string>;
 };
 
 export const generateVectorGraphic = async (prompt: string): Promise<string> => {
-    const fullPrompt = `Create a vector graphic logo based on the theme: "${prompt}".
+    const fullPrompt = `Generate a clean, minimalist, single-color SVG vector graphic based on the following prompt: "${prompt}".
+    The output must be a valid SVG file string. Do not include any explanation or markdown formatting like \`\`\`svg.
+    The SVG should be simple, suitable for a logo or t-shirt design. Use black (#000000) for all paths and strokes. Do not use fills unless necessary for the design.
+    The SVG viewBox should be "0 0 100 100".`;
 
-**ABSOLUTE NON-NEGOTIABLE RULES:**
-1.  **OUTPUT FORMAT:** The output must be a single, isolated graphic object on a **completely transparent background**.
-2.  **STYLE:** The style must be a clean, flat, 2D vector illustration. Think modern logo, not a picture. Use solid colors and bold lines.
-3.  **NO REALISM:** Do **NOT** generate photographs, realistic images, 3D renders, or anything that looks like a photo.
-4.  **NO BACKGROUNDS:** Do **NOT** include any backgrounds, scenes, environments, textures, or colors behind the main graphic object. The background must be transparent.
-5.  **NO HUMANS OR TEXT:** Do **NOT** include any people, human figures, text, letters, or numbers unless the original prompt explicitly asks for them.
-6.  **SIMPLE & BOLD:** The final graphic must be simple, bold, and easily recognizable, suitable for printing on apparel.`;
-    
-    const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: fullPrompt,
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: fullPrompt,
         config: {
-            numberOfImages: 1,
-            outputMimeType: 'image/png',
-            aspectRatio: '1:1',
-        },
+            temperature: 0.2,
+        }
     });
 
-    if (response.generatedImages.length > 0) {
-        return `data:image/png;base64,${response.generatedImages[0].image.imageBytes}`;
+    const svgText = response.text.replace(/```svg/g, '').replace(/```/g, '').trim();
+    if (!svgText.startsWith('<svg')) {
+        throw new Error("AI did not return a valid SVG.");
     }
-    throw new Error("Failed to generate a vector graphic from the prompt.");
+    return `data:image/svg+xml;base64,${btoa(svgText)}`;
 };
 
-
-export const validateMockupOutput = async (generatedImageBase64: string): Promise<boolean> => {
-    const data = generatedImageBase64.split(',')[1];
-    const mimeType = generatedImageBase64.match(/:(.*?);/)?.[1] || 'image/png';
-    
-    const imagePart = {
-        inlineData: { data, mimeType },
-    };
-
-    const prompt = `Analyze this mockup image. Respond ONLY with 'TRUE' if the image adheres to ALL the following rules, otherwise respond 'FALSE'.
-    1. The garment itself does not have photorealistic lighting, shadows, or textures. It must look like a clean vector illustration.
-    2. Any applied graphic is flat or has only the specified texture (like embroidery), fitting the vector style.
-    3. The overall shape, color, and background of the original blank mockup are perfectly preserved.
-    `;
-
+export const generateDesignPrompt = async (productName: string): Promise<string> => {
+    const prompt = `Generate a short, creative, and inspiring design prompt for a vector graphic to be placed on a "${productName}". The prompt should be suitable for a minimalist, modern apparel brand. Output only the prompt text. For example: "a minimalist geometric wolf head logo".`;
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: {
-            temperature: 0, // for deterministic TRUE/FALSE
-        }
+        contents: prompt
     });
-
-    const resultText = response.text.trim().toUpperCase();
-    console.log('Validation result:', resultText);
-    return resultText === 'TRUE';
-};
-
-const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
-
-const getSystemPrompt = (): string => {
-    return `Sei VectorPro, un'IA specializzata nell'applicazione fotorealistica di design grafici su mockup di abbigliamento, con un focus maniacale sulla preservazione dello stile vettoriale del mockup base.
-
-    REGOLE FONDAMENTALI (NON NEGOZIABILI):
-    1.  **PRESERVAZIONE ASSOLUTA:** Il mockup di base (colore, forma, sfondo, stile di disegno) NON DEVE ESSERE ALTERATO. Applica solo il design. Non aggiungere ombre, luci, o texture al capo d'abbigliamento stesso.
-    2.  **STILE VETTORIALE:** L'output finale DEVE mantenere l'aspetto di un'illustrazione vettoriale pulita. Nessun elemento fotografico.
-    3.  **OUTPUT DIRETTO:** Rispondi SOLO con l'immagine finale. Nessun testo, nessuna spiegazione.`;
-};
-
-const getUserPrompt = (applicationType: ApplicationType, placement: string): string => {
-    if (applicationType === 'Embroidery') {
-        return `Applica il design fornito sul mockup di felpa.
-    Simula un RICAMO (embroidery) fotorealistico e dettagliato.
-    Crea una texture visibile con fili (thread texture), un leggero rilievo tridimensionale (slight 3D elevation), e un effetto lucido (satin stitch sheen) dove la luce colpirebbe i fili.
-    Mantieni i bordi del ricamo netti e definiti.
-    Posizionalo accuratamente in questa area: ${placement}.`;
-    }
-    // Default to 'Print'
-    return `Applica il design fornito sul mockup di t-shirt.
-    Simula una stampa DTG (Direct-to-Garment) di altissima qualità.
-    Il design deve apparire piatto, con colori vividi e integrato nel tessuto, rispettando le lievi pieghe del capo.
-    Posizionalo accuratamente in questa area: ${placement}.`;
-}
-
-
-export const applyVectorToMockup = async (
-    mockupImage: File, 
-    designImage: File, 
-    applicationType: ApplicationType,
-    placement: string,
-    onStatusUpdate?: (status: string) => void,
-    feedback?: string
-): Promise<string> => {
-    const MAX_RETRIES = 2; // As per spec
-
-    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-        onStatusUpdate?.(`Applying design (Attempt ${attempt}/${MAX_RETRIES + 1})...`);
-    
-        const mockupPart = await fileToGenerativePart(mockupImage);
-        const designPart = await fileToGenerativePart(designImage);
-
-        const systemInstruction = getSystemPrompt();
-        let userInstruction = getUserPrompt(applicationType, placement);
-        
-        if (attempt > 1) {
-            userInstruction += "\n\n**ATTENTION:** The previous attempt failed quality validation. Be extremely strict in adhering to the Key Rules. Maintain the vector style and do not alter the mockup base.";
-        }
-        
-        if (feedback) {
-            userInstruction += `\n\n**USER FEEDBACK FOR IMPROVEMENT:** The previous result was not satisfactory. Please regenerate the image, taking the following user feedback into account: "${feedback}"`;
-        }
-
-        const parts = [mockupPart, designPart, { text: userInstruction }];
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: { parts },
-            config: {
-                systemInstruction,
-                responseModalities: [Modality.IMAGE],
-                temperature: applicationType === 'Embroidery' ? 0.2 : 0.1,
-            },
-        });
-
-        const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-        if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-            const generatedImageBase64 = `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
-            
-            onStatusUpdate?.(`Validating result (Attempt ${attempt}/${MAX_RETRIES + 1})...`);
-            const isValid = await validateMockupOutput(generatedImageBase64);
-
-            if (isValid) {
-                onStatusUpdate?.('Validation successful!');
-                return generatedImageBase64;
-            } else if (attempt <= MAX_RETRIES) {
-                 onStatusUpdate?.(`Validation failed. Retrying...`);
-                 await sleep(Math.pow(2, attempt) * 200); // Exponential backoff
-            }
-        } else {
-             if (attempt <= MAX_RETRIES) {
-                onStatusUpdate?.(`Image generation failed. Retrying...`);
-                await sleep(Math.pow(2, attempt) * 200); // Exponential backoff
-             }
-        }
-    }
-
-    throw new Error("Failed to generate a valid mockup after multiple attempts. Please try a different design or adjust custom instructions.");
-};
-
-
-export type MultimodalContent = (string | File)[];
-
-export const sketchToMockup = async (sketchFile: File, prompt: string): Promise<string> => {
-    const sketchPart = await fileToGenerativePart(sketchFile);
-    const textPart = { text: prompt };
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [sketchPart, textPart] },
-        config: {
-            responseModalities: [Modality.IMAGE],
-        },
-    });
-
-    const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-    if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-        return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
-    }
-    throw new Error("Failed to generate a mockup from the sketch.");
+    return response.text.trim();
 };
 
 export const editImage = async (imageFile: File, prompt: string): Promise<string> => {
     const imagePart = await fileToGenerativePart(imageFile);
-
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [imagePart, { text: prompt }] },
@@ -334,55 +132,56 @@ export const editImage = async (imageFile: File, prompt: string): Promise<string
             responseModalities: [Modality.IMAGE],
         },
     });
-    
-    const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-    if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-        return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
+
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            const base64ImageBytes: string = part.inlineData.data;
+            return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+        }
     }
-    throw new Error("Failed to edit the image.");
+    throw new Error("AI did not return an edited image.");
 };
 
 export const generateImage = async (prompt: string, aspectRatio: string): Promise<string[]> => {
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
-        prompt,
+        prompt: prompt,
         config: {
             numberOfImages: 1,
+            outputMimeType: 'image/png',
             aspectRatio: aspectRatio as any,
-        },
+        }
     });
 
     return response.generatedImages.map(img => `data:image/png;base64,${img.image.imageBytes}`);
 };
 
-export const generateCodeForImage = async (prompt: string, imageBase64: string, mimeType: string): Promise<string> => {
-    const imagePart = { inlineData: { data: imageBase64, mimeType } };
-    const promptPart = { text: `Generate clean, responsive HTML and Tailwind CSS code for this UI design: ${prompt}. Do not include any explanations, just the code.` };
+export const generateCodeForImage = async (prompt: string, base64Data: string, mimeType: string): Promise<string> => {
+    const imagePart = {
+        inlineData: {
+            data: base64Data,
+            mimeType: mimeType,
+        },
+    };
+    const fullPrompt = `Based on this image of a UI, and the user prompt "${prompt}", generate the corresponding HTML with inline CSS. The output should be a single block of code. Do not include explanations.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
-        contents: { parts: [promptPart, imagePart] },
+        contents: { parts: [imagePart, { text: fullPrompt }] }
     });
 
-    // Clean up markdown code block fences
-    return response.text.replace(/```(html|css)?/g, '').trim();
+    return response.text.replace(/```html/g, '').replace(/```/g, '').trim();
 };
 
 export const generateWithThinking = async (content: MultimodalContent): Promise<string> => {
-    const parts = await Promise.all(content.map(async item => {
-        if (typeof item === 'string') {
-            return { text: item };
-        }
-        return fileToGenerativePart(item);
-    }));
+    const parts = await Promise.all(content.map(item => typeof item === 'string' ? { text: item } : fileToGenerativePart(item)));
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
-        contents: { parts },
+        contents: { parts: parts },
         config: {
-            thinkingConfig: { thinkingBudget: 32768 },
-            systemInstruction: `You are VectorCraft AI's assistant. You have deep knowledge of all app features. Be helpful, strategic, and concise.`,
-        },
+            thinkingConfig: { thinkingBudget: 8192 }
+        }
     });
 
     return response.text;
@@ -394,117 +193,67 @@ export const searchWithGrounding = async (prompt: string): Promise<{ text: strin
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
+        }
+    });
+
+    const text = response.text;
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+    return { text, sources: sources as GroundingChunk[] };
+};
+
+export const sketchToMockup = async (sketchFile: File, prompt: string): Promise<string> => {
+    const imagePart = await fileToGenerativePart(sketchFile);
+    const fullPrompt = `Take the user-provided sketch and transform it based on this prompt: "${prompt}". The output must be a single, clean image.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
         },
     });
 
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    return { text: response.text, sources };
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            const base64ImageBytes: string = part.inlineData.data;
+            return `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+        }
+    }
+    throw new Error("AI did not return an image from the sketch.");
 };
 
 export const generateTrendReport = async (topic: string): Promise<string> => {
-    const prompt = `As a senior trend forecaster for a modern apparel brand, generate a detailed report on the topic: "${topic}". Use Google Search to find the latest information.
+    const prompt = `Act as a professional trend forecaster. Using Google Search, analyze the provided topic: "${topic}".
+    Generate a concise but detailed report covering:
+    1.  **Key Styles & Silhouettes:** What are the dominant shapes and garments?
+    2.  **Color Palette:** What are the key colors and color combinations? Provide HEX codes.
+    3.  **Key Materials & Textures:** What fabrics are trending?
+    4.  **Overall Vibe:** A short paragraph summarizing the trend's aesthetic.
+    Format your response in clear markdown.`;
 
-    The report should be structured with the following sections:
-    1.  **Key Themes & Concepts:** High-level overview of the main ideas.
-    2.  **Color Palette:** A list of 5-7 key colors with hex codes and descriptions.
-    3.  **Key Garments & Silhouettes:** Specific apparel items that are trending.
-    4.  **Graphics & Prints:** The dominant styles for graphics.
-    
-    Format the output using clear headings and bullet points.`;
-    
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
-            temperature: 0.5,
-        },
+        }
     });
-    
+
     return response.text;
-};
-
-export const extractBrandKit = async (url: string): Promise<BrandKitData> => {
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Analyze the visual identity of the website at this URL: ${url}. Extract its brand kit.`,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    colors: {
-                        type: Type.OBJECT,
-                        properties: {
-                            primary: { type: Type.STRING },
-                            secondary: { type: Type.STRING },
-                            accent: { type: Type.STRING },
-                            neutral: { type: Type.STRING },
-                        },
-                    },
-                    fonts: {
-                        type: Type.OBJECT,
-                        properties: {
-                            heading: { type: Type.STRING },
-                            body: { type: Type.STRING },
-                        },
-                    },
-                    logoDescription: { type: Type.STRING },
-                    toneOfVoice: { type: Type.STRING },
-                },
-            },
-        },
-    });
-
-    return JSON.parse(response.text);
-};
-
-export const extractBrandKitFromImage = async (imageFile: File): Promise<BrandKitData> => {
-    const imagePart = await fileToGenerativePart(imageFile);
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: { parts: [
-            imagePart, 
-            { text: "This image is a company logo. Analyze its visual identity and extract a brand kit based on it." }
-        ]},
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    colors: {
-                        type: Type.OBJECT,
-                        properties: {
-                            primary: { type: Type.STRING },
-                            secondary: { type: Type.STRING },
-                            accent: { type: Type.STRING },
-                            neutral: { type: Type.STRING },
-                        },
-                    },
-                    fonts: {
-                        type: Type.OBJECT,
-                        properties: {
-                            heading: { type: Type.STRING },
-                            body: { type: Type.STRING },
-                        },
-                    },
-                    logoDescription: { type: Type.STRING },
-                    toneOfVoice: { type: Type.STRING },
-                },
-            },
-        },
-    });
-    return JSON.parse(response.text);
 };
 
 export const generateMarketingCopy = async (imageFile: File, productName: string, toneOfVoice: string): Promise<MarketingCopy> => {
     const imagePart = await fileToGenerativePart(imageFile);
+    const prompt = `Analyze the product image. The product is named "${productName}". The brand's tone of voice is "${toneOfVoice}".
+    Generate marketing copy in JSON format. The JSON object must have three keys: "productDescription", "instagramCaption", and "emailSubject".
+    - productDescription: An engaging e-commerce description (2-3 sentences).
+    - instagramCaption: A catchy caption for an Instagram post, including 3-5 relevant hashtags.
+    - emailSubject: A compelling subject line for a marketing email.`;
+    
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
-        contents: { parts: [
-            imagePart,
-            { text: `Generate marketing copy for a product named "${productName}". The brand's tone of voice is "${toneOfVoice}".` }
-        ]},
+        contents: { parts: [imagePart, { text: prompt }] },
         config: {
             responseMimeType: 'application/json',
             responseSchema: {
@@ -514,9 +263,258 @@ export const generateMarketingCopy = async (imageFile: File, productName: string
                     instagramCaption: { type: Type.STRING },
                     emailSubject: { type: Type.STRING },
                 },
+                required: ['productDescription', 'instagramCaption', 'emailSubject'],
             },
         },
     });
 
-    return JSON.parse(response.text);
+    let jsonStr = response.text.trim();
+    return JSON.parse(jsonStr) as MarketingCopy;
+};
+
+export const extractBrandKit = async (url: string): Promise<BrandKitData> => {
+    const prompt = `Analyze the website at this URL: ${url}.
+    Extract its brand kit and return it as a JSON object.
+    The object must have these keys: "colors" (an object with "primary", "secondary", "accent", "neutral" hex codes), "fonts" (an object with "heading" and "body" font family names), and "toneOfVoice" (a short description).`;
+    
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: prompt,
+        config: {
+            tools: [{ googleSearch: {} }],
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    colors: {
+                        type: Type.OBJECT,
+                        properties: {
+                            primary: { type: Type.STRING },
+                            secondary: { type: Type.STRING },
+                            accent: { type: Type.STRING },
+                            neutral: { type: Type.STRING },
+                        },
+                    },
+                    fonts: {
+                        type: Type.OBJECT,
+                        properties: {
+                            heading: { type: Type.STRING },
+                            body: { type: Type.STRING },
+                        }
+                    },
+                    toneOfVoice: { type: Type.STRING }
+                },
+                required: ['colors', 'fonts', 'toneOfVoice']
+            },
+        }
+    });
+    
+    let jsonStr = response.text.trim();
+    return JSON.parse(jsonStr) as BrandKitData;
+};
+
+export const extractBrandKitFromImage = async (imageFile: File): Promise<BrandKitData> => {
+    const imagePart = await fileToGenerativePart(imageFile);
+    const prompt = `This image is a company logo. Analyze it to extract its brand kit.
+    Return a JSON object with: "colors" (an object with "primary", "secondary", "accent", "neutral" hex codes from the logo and its likely context), "fonts" (guess "heading" and "body" font family names based on the logo's style), "logoDescription" (a brief visual description), and "toneOfVoice" (a short description of the brand's likely personality).`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    colors: {
+                        type: Type.OBJECT,
+                        properties: {
+                            primary: { type: Type.STRING },
+                            secondary: { type: Type.STRING },
+                            accent: { type: Type.STRING },
+                            neutral: { type: Type.STRING },
+                        },
+                    },
+                    fonts: {
+                        type: Type.OBJECT,
+                        properties: {
+                            heading: { type: Type.STRING },
+                            body: { type: Type.STRING },
+                        }
+                    },
+                    logoDescription: { type: Type.STRING },
+                    toneOfVoice: { type: Type.STRING }
+                },
+                required: ['colors', 'fonts', 'logoDescription', 'toneOfVoice']
+            },
+        }
+    });
+
+    let jsonStr = response.text.trim();
+    return JSON.parse(jsonStr) as BrandKitData;
+};
+
+const buildSimplifiedSketchPrompt = (base: BaseConstruction, colorHex: string, view: 'front' | 'back'): string => {
+    // ROLE OBJECTIVE
+    const roleAndTask = `
+You are an expert AI assistant specialized as a Technical Fashion Illustrator.
+Your sole purpose is to generate clean, accurate, and professional 2D flat sketches for tech packs.
+Your main task is to generate ONE image per request: either a FRONT VIEW or a BACK VIEW as a 2D technical flat sketch.
+    `.trim();
+
+    // --- Section 1: Garment Description (Visual Glossary Implementation) ---
+    const descriptionParts: string[] = [base.fitType];
+     // Add garment type, but handle special cases like Zip Sweatshirt where collar is implicit
+    if (base.garmentType !== 'Zip Sweatshirt') {
+        descriptionParts.push(base.garmentType);
+    }
+    
+    const isTop = !base.garmentType.includes('Jeans') && !['Pants', 'Skirt', 'Shorts'].some(t => base.garmentType.includes(t));
+
+    if (isTop) {
+        switch (base.sleeveType) {
+            case 'Senza Maniche': descriptionParts.push('sleeveless'); break;
+            case 'Standard': descriptionParts.push('with standard set-in sleeves where the seam follows the armhole'); break;
+            case 'Raglan': descriptionParts.push('with raglan sleeves, featuring a diagonal seam from the collar to the underarm and no shoulder seam'); break;
+            case 'Drop Shoulder': descriptionParts.push('with drop shoulder sleeves, where the shoulder seam is positioned visibly lower on the arm'); break;
+            default: descriptionParts.push(`${base.sleeveType} sleeves`);
+        }
+        
+        // Only add collar type if it's not a garment with an implicit collar style (like a hoodie or zip-up)
+        const hasImplicitCollar = ['Hoodie', 'Zip Hoodie', 'Parka', 'Zip Sweatshirt'].some(t => base.garmentType.includes(t));
+        if (!hasImplicitCollar) {
+            descriptionParts.push(`${base.collarType} collar`);
+        }
+    }
+
+    if (base.garmentType.includes('Jeans')) descriptionParts.push("5-pocket style, belt loops, zip fly seam");
+    if (base.garmentType === 'Hoodie') descriptionParts.push("kangaroo pocket");
+    if (base.garmentType === 'Zip Hoodie') descriptionParts.push("full front zipper, split kangaroo pocket");
+    if (base.garmentType === 'Zip Sweatshirt') descriptionParts.push("A zip sweatshirt with a full front zipper and a stand-up collar");
+    if (base.garmentType === 'Trench Coat') descriptionParts.push("double-breasted front, waist belt, epaulets, storm flap on back");
+    if (base.garmentType === 'Blazer') descriptionParts.push("lapels and buttons");
+    if (base.garmentType === 'Leather Jacket') descriptionParts.push("asymmetric biker-style lapels, zippers");
+    if (base.garmentType.includes('Puffer') || base.garmentType.includes('Parka')) descriptionParts.push("quilting stitch lines");
+    
+    const garmentDescription = "Garment Details: " + descriptionParts.join(', ');
+
+    // --- Section 2: View Instruction & Logical Hierarchy ---
+    const logicalHierarchy = `
+### Golden Rules (Logical Hierarchy)
+1.  **GARMENT TYPE IS KING:** The specified garment type (e.g., 'Zip Hoodie') dictates the core design.
+2.  **LOGICAL EXCLUSION:** Bottoms (like jeans) do not have sleeve or collar types. Tops do not have a fly seam.
+3.  **ABSOLUTE GARMENT CONSISTENCY (CRITICAL):** The Front View and Back View must depict the **exact same physical garment**. This means all proportions (sleeve length, body width, garment length), seam placements, fabric drape, and stylistic details MUST be perfectly consistent between the two views. The back view is simply the front view flipped over, maintaining all identical characteristics.
+4.  **CRITICAL RULE - ABSOLUTE FORMAT CONSISTENCY:** Both the Front View and Back View MUST be generated in the identical format: a 2D technical flat sketch. It is FORBIDDEN to generate one view as a sketch and the other as a photograph, realistic illustration, or 3D render. This is a critical failure.
+    `.trim();
+    
+    const viewInstruction = view === 'front'
+        ? 'Generate the **FRONT VIEW ONLY** of the garment.'
+        : `Generate the **BACK VIEW ONLY** of the exact same garment. Adhere strictly to Golden Rule #3. The back view MUST be stylistically, proportionally, and dimensionally identical to the front view. All details like sleeve shape, hem style, and overall size must be maintained perfectly.`;
+
+    // --- Section 3: Ultra-Strict Formatting Rules ---
+    const formattingRules = `
+### Ultra-Strict Output Formatting Rules (THE MOST IMPORTANT)
+1.  **ABSOLUTE PROHIBITION OF PHOTOGRAPHY, REALISM, AND MODELS:**
+    *   It is **ABSOLUTELY FORBIDDEN** to generate photographs, photorealistic images, or 3D renderings.
+    *   It is **ABSOLUTELY FORBIDDEN** to draw, generate, or show the garment worn by a human model, person, mannequin, or 3D figure.
+    *   The output must be a flat technical drawing, **NOT** an e-commerce or lookbook photo. Any output that resembles a photo is a critical failure.
+
+2.  **2D TECHNICAL FLAT SKETCH STYLE ONLY:**
+    *   The output **MUST** be a 2D technical flat sketch.
+    *   Use only clean, defined **black outlines** (hex code: #000000).
+    *   Use a pure **white background** (hex code: #FFFFFF).
+    *   The garment itself should be filled with the solid, flat color: ${colorHex}.
+    *   **NO** shadows, **NO** gradients, **NO** photorealistic textures.
+    *   **SLEEVE POSTURE (CRITICAL FOR TOPS - APPLIES TO BOTH VIEWS):** For all tops (T-shirts, sweaters, hoodies, jackets, etc.), the sleeves MUST be drawn open, spread outwards, and slightly upwards in a classic 'flat lay' technical pose. The angle and position of the sleeves must be consistent between the front and back views. Do NOT draw sleeves pointing downwards or bent at the elbow.
+
+3.  **EXACTLY ONE IMAGE, NO EXTRAS:**
+    *   Generate exactly **ONE (1)** image per request.
+    *   **NEVER** generate side views.
+    *   **NEVER** generate collages of multiple images in a single frame.
+
+4.  **NO TEXT OR ANNOTATIONS:**
+    *   The final image must contain **ONLY THE DRAWING**.
+    *   **NEVER** include text (e.g., 'Front View'), annotations, arrows, measurements, or logos inside the image.
+
+5.  **HIGH-QUALITY DETAILING (CRITICAL):**
+    *   **Seams:** All construction seams (side seams, hems, cuffs, collars, plackets) must be clearly drawn with clean, visible stitch lines (e.g., using dashed or parallel lines where appropriate, like for coverstitching on hems).
+    *   **Zippers:** If the garment has a zipper, it must be drawn with realistic detail, including the zipper teeth, the slider, and the pull tab.
+    *   **Hems & Cuffs:** Ribbed hems and cuffs (on sweatshirts, hoodies, etc.) must be rendered with vertical lines to indicate the ribbed texture.
+    *   **Folds & Creases:** Use minimal, subtle, and clean lines to indicate natural fabric folds (e.g., at the elbow or where fabric gathers at a waistband). This adds realism without violating the "no shadows/gradients" rule. These should be suggestion lines, not heavy shading.
+    `.trim();
+
+    // --- Final Assembly ---
+    const prompt = [
+        roleAndTask,
+        logicalHierarchy,
+        garmentDescription,
+        viewInstruction,
+        formattingRules,
+    ].join('\n\n');
+
+    return prompt;
+};
+
+
+export const generateFlatSketches = async (base: BaseConstruction, colorHex: string): Promise<{ front: string; back: string; }> => {
+    const results: { front?: string; back?: string } = {};
+    const views: ('front' | 'back')[] = ['front', 'back'];
+
+    for (const view of views) {
+        const prompt = buildSimplifiedSketchPrompt(base, colorHex, view);
+
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+                aspectRatio: '1:1',
+            }
+        });
+        
+        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+        results[view] = `data:image/png;base64,${base64ImageBytes}`;
+    }
+
+    if (!results.front || !results.back) {
+        throw new Error("Failed to generate one or more flat sketches.");
+    }
+
+    return {
+        front: results.front,
+        back: results.back,
+    };
+};
+
+export const getColorInformation = async (colorHex: string): Promise<{ pantone: string; name: string; }> => {
+    const prompt = `You are a color expert for the apparel industry.
+    Given the HEX color code "${colorHex}", provide the closest matching Pantone TCX code and a common, descriptive color name.
+    
+    Return the result as a JSON object with two keys: "pantone" and "name".`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    pantone: {
+                        type: Type.STRING,
+                        description: 'The closest Pantone TCX code, e.g., "19-4006 TCX".'
+                    },
+                    name: {
+                        type: Type.STRING,
+                        description: 'A common descriptive color name, e.g., "Jet Black".'
+                    },
+                },
+                required: ['pantone', 'name'],
+            },
+        },
+    });
+
+    const jsonStr = response.text.trim();
+    return JSON.parse(jsonStr) as { pantone: string; name: string; };
 };

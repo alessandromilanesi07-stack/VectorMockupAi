@@ -8,6 +8,7 @@ import { UploadIcon, DownloadIcon, WandIcon, ThumbsUpIcon, ThumbsDownIcon, Refre
 import type { ApplicationType, MockupProduct, MockupView } from '../types';
 import { productCategories, products } from './mockup/data';
 import * as ProductIcons from './mockup/icons';
+import { ColorPickerModal } from './ColorPickerModal';
 
 const MAX_MOCKUP_SIZE_MB = 5;
 const MAX_DESIGN_SIZE_MB = 2;
@@ -105,10 +106,11 @@ const GenerationPanel: React.FC<{
     onGenerateIdea?: () => void;
     isGeneratingIdea?: boolean;
     onDownloadBlank?: () => void;
+    onOpenColorPicker?: () => void;
 }> = ({ 
     title, prompt, setPrompt, onGenerate, isLoading, generatedImage, generatedImages, selectedMockupView, setSelectedMockupView, uploadedFile, source, setSource, onFileSelect, maxSizeMB,
     isMockupPanel, selectedCategory, setSelectedCategory, selectedProduct, setSelectedProduct, mockupColor, setMockupColor, mockupCustomizations, setMockupCustomization,
-    onGenerateIdea, isGeneratingIdea, onDownloadBlank
+    onGenerateIdea, isGeneratingIdea, onDownloadBlank, onOpenColorPicker
 }) => {
     const displayImage = isMockupPanel 
         ? (uploadedFile ? URL.createObjectURL(uploadedFile) : (generatedImages && selectedMockupView ? generatedImages[selectedMockupView] : null))
@@ -200,10 +202,14 @@ const GenerationPanel: React.FC<{
                                ))}
                                 <div>
                                     <label className="text-xs font-bold text-gray-300">Colore</label>
-                                     <div className="custom-color-picker-wrapper mt-1">
+                                    <button 
+                                        onClick={onOpenColorPicker} 
+                                        className="custom-color-picker-wrapper mt-1 w-full text-left"
+                                        aria-label="Open color picker"
+                                    >
                                         <div className="color-swatch" style={{ backgroundColor: mockupColor }}></div>
-                                        <input type="color" value={mockupColor} onChange={(e) => setMockupColor?.(e.target.value)} />
-                                    </div>
+                                        <span className="ml-2 text-sm font-mono text-gray-300 truncate">{mockupColor}</span>
+                                    </button>
                                 </div>
                             </div>
 
@@ -263,6 +269,7 @@ export const MockupStudio: React.FC = () => {
     const [selectedProduct, setSelectedProduct] = useState<MockupProduct | null>(products.find(p => p.id === 'hoodie-classic') || products[0]);
     const [mockupColor, setMockupColor] = useState<string>('#111827');
     const [mockupCustomizations, setMockupCustomizations] = useState<{ [key: string]: string }>({});
+    const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
 
     // Generated asset states
     const [generatedMockups, setGeneratedMockups] = useState<Record<MockupView, string> | null>(null);
@@ -519,6 +526,7 @@ export const MockupStudio: React.FC = () => {
                     mockupCustomizations={mockupCustomizations}
                     setMockupCustomization={handleSetCustomization}
                     onDownloadBlank={handleDownloadMockup}
+                    onOpenColorPicker={() => setIsColorPickerOpen(true)}
                 />
 
                 {/* Design Panel */}
@@ -678,6 +686,12 @@ export const MockupStudio: React.FC = () => {
                     </div>
                 </div>
             </div>
+            <ColorPickerModal 
+                isOpen={isColorPickerOpen}
+                onClose={() => setIsColorPickerOpen(false)}
+                currentColor={mockupColor}
+                onSetColor={setMockupColor}
+            />
         </div>
     );
 };
